@@ -43,7 +43,7 @@ A FOSS application that gamifies STEM
 
 ## 🚀 Getting Started
 
-**Note: The development environment and folder structure has NOT been set up yet.**
+**Note: An app prototype is planned, but nothing runs for now.**
 
 ### Prerequisites
 
@@ -78,7 +78,7 @@ pixi run update-nodejs
 
 The game client will be available at [http://localhost:5173](http://localhost:5173)
 
-### Database Setup
+### Database Setup (not yet implemented)
 
 Ensure PostgreSQL is not already globally installed and running before proceeding.
 

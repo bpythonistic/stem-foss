@@ -1,0 +1,46 @@
+[workspace]
+authors = ["Byron"]
+channels = ["conda-forge"]
+name = "stem-foss"
+platforms = ["win-64", "linux-64"]
+version = "0.1.0"
+
+[environments]
+default = ["default"]
+test = ["test"]
+
+[tasks]
+update-nodejs = "npm install --save-dev"
+compile-ts = "tsc"
+watch-ts = "tsc -w"
+build = "npm run build"
+# pre-commit = "npx lint-staged && ruff check --fix && ruff format --line-length 88"
+pre-commit = "echo 'Not implemented yet.'"
+
+[dependencies]
+python = "3.14.*"
+fastapi = ">=0.135.1,<0.136"
+pyyaml = ">=6.0.3,<7"
+nodejs = ">=25.7.0,<25.8"
+numpy = ">=2.4.2,<3"
+python-dotenv = ">=1.2.2,<2"
+sqlmodel = ">=0.0.37,<0.0.38"
+psycopg = ">=3.3.3,<4"
+postgresql = "*"
+ruff = "*"
+pre-commit = "*"
+uvicorn = "*"
+
+[feature.test.dependencies]
+sqlite = "*"
+pytest = "*"
+pytest-cov = "*"
+
+[feature.test.tasks]
+backend-tests = "pytest --cov=app backend/tests/"
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.format]
+docstring-code-format = true
