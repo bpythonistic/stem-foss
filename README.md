@@ -29,6 +29,8 @@ A FOSS application that gamifies STEM
 - **Language:** Python 3.14
 - **Framework:** FastAPI
 - **Math Kernel:** NumPy / SciPy (for generating and analyzing semi-random drone behavior)
+- **Data Manipulation:** Polars
+- **Plotting:** Seaborn / mpld3 (for generating plots of Probability Density Functions and converting them to HTML)
 - **Database:** PostgreSQL
 - **ORM:** SQLAlchemy / SQLModel
 - **Package Manager:** [Pixi](https://pixi.prefix.dev/latest/)
@@ -38,7 +40,7 @@ A FOSS application that gamifies STEM
 - **Language:** TypeScript 5
 - **Framework:** React
 - **Build Tool:** Vite
-- **Visualization:** TBD (map/graphics rendering tools like [Top 5 map libraries for React](https://it-waves.com/blogs/top-5-map-libraries-for-react-in-2024))
+- **Visualization:** React Leaflet (for rendering 2D maps with drone locations)
 - **State Management:** React Hooks / Context API
 
 ## 🚀 Getting Started
