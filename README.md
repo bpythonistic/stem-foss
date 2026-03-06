@@ -58,20 +58,24 @@ To learn Probability Density Functions (PDFs) through analysis of randomized dro
 - Classes table
   - Id
   - Name
+  - Description
   - Trait_1
   - Trait_2
   - Trait_3
 - Traits table
   - Id
-  - Category
   - Name
+  - Description
+  - Category
   - Modifies
-  - Scaling_Funct
+  - Multiplier
+  - Offset
 - Stats table
   - Id
   - User_Id
   - Stat_Type
-  - Stat_Bounds
+  - Stat_Min
+  - Stat_Max
   - Base_Value
   - Current_Value
 - Upgrades table
@@ -79,7 +83,8 @@ To learn Probability Density Functions (PDFs) through analysis of randomized dro
   - Name
   - Cost
   - Effected_Stat
-  - Effect_Funct
+  - Stat_Multiplier
+  - Stat_Offset
 - Targets table
   - Id
   - Category
@@ -88,6 +93,10 @@ To learn Probability Density Functions (PDFs) through analysis of randomized dro
   - Decel_Max
   - Hit_Box
   - Loot_Dist
+  - Loot_Min
+  - Loot_Max
+  - Loot_Mean
+  - Loot_StdDev
 
 ### Other Requirements
 
