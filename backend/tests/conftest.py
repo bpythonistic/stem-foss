@@ -5,12 +5,8 @@ The fixtures ensure that each test runs in isolation with a clean database state
 """
 
 from pathlib import Path
-from typing import Generator
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session, create_engine, SQLModel
-from sqlalchemy.pool import StaticPool
 from yaml import safe_load
 
 CONFIG_FILE_PATH = Path(__file__).parent / "testdata" / "testconfig.yaml"
