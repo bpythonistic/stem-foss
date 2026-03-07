@@ -22,8 +22,7 @@ update-nodejs = "npm install --save-dev"
 compile-ts = "tsc"
 watch-ts = "tsc -w"
 build = "npm run build"
-# pre-commit = "npx lint-staged && ruff check --fix && ruff format --line-length 88"
-pre-commit = "echo 'Not implemented yet.'"
+pre-commit = "npx lint-staged && ruff check --fix && ruff format --line-length 88"
 
 [dependencies]
 python = "3.14.*"
@@ -51,7 +50,7 @@ pytest-cov = "*"
 backend-tests = "pytest --cov=app backend/tests/"
 
 [tool.ruff]
-line-length = 80
+line-length = 88
 
 [tool.ruff.format]
 docstring-code-format = true
