@@ -1,17 +1,18 @@
 """
 This module contains the target mechanics for the RPG game.
-It defines the logic for calculating target behavior, loot distribution, and other related mechanics.
+It defines the logic for calculating target behavior,
+loot distribution, and other related mechanics.
 
 """
 
 # import os
-from typing import Callable
-from datetime import datetime, timedelta
+from typing import Generator
 
 import numpy.random as npr
+import numpy as np
 import polars as pl
 
-from app.schemas.sqlmodels import Target, TargetClass, LootDist
+from app.schemas.sqlmodels import Target, TargetClass, LootDist, Map
 
 
 def generate_random_target(target_class: TargetClass, user_id: str) -> Target:
@@ -60,7 +61,7 @@ def generate_random_target(target_class: TargetClass, user_id: str) -> Target:
             return Target(
                 user_id=user_id,
                 name="Large Target",
-                description="A large target with high health and low agility.",
+                description="A large target with low agility.",
                 category=target_class,
                 top_speed=6.0,
                 accel_max=3.0,
@@ -76,92 +77,119 @@ def generate_random_target(target_class: TargetClass, user_id: str) -> Target:
             raise ValueError(f"Invalid target class: {target_class}")
 
 
-def generate_behavior(
-    target: Target,
-) -> Callable[[datetime, timedelta, timedelta], pl.DataFrame]:
+def generate_map_heat_points(
+    target_map: Map, margin: float = 5.00
+) -> pl.DataFrame:
     """
-    Generate a behavior function for the given target.
+    Generate random heat points for the map.
 
     Args:
-        target (Target): The target for which to generate the behavior.
-        time_step (float): The time step for the behavior generation, in seconds.
+        num_points (int): The number
+            of heat points to generate.
+        map_width (float): The width of the map
+            for position constraints.
+        margin (float): The margin to avoid placing heat
+            points too close to the edges of the map.
     Returns:
-        Callable[[datetime, timedelta], pl.DataFrame]: A function that generates the target's behavior over time.
+        pl.DataFrame: A DataFrame containing the
+            generated heat points with
+            their positions and visit durations.
     """
+    return pl.DataFrame(
+        {
+            "x": npr.uniform(
+                margin, target_map.map_size - margin, target_map.num_heat_points
+            ),  # Random x positions within the map width
+            "y": npr.uniform(
+                margin, target_map.map_size - margin, target_map.num_heat_points
+            ),  # Random y positions within the map width
+            "visit_duration": min(
+                max(npr.normal(180, 30, target_map.num_heat_points), 30), 360
+            ),  # Random visit durations with a normal distribution
+        }
+    )
 
-    def update_target_position(
-        current_position: float, map_width: float, time_step: timedelta
-    ) -> float:
-        """
-        Update the target's position based on its current position, acceleration, and the time step.
 
-        Args:
-            current_position (float): The current position of the target.
-        Returns:
-            float: The updated position of the target.
-        """
-        accel = npr.normal(0, (target.accel_max - target.decel_max) ** 0.5 / 2)
-        velocity = min(
-            max(accel * time_step.total_seconds(), target.top_speed),
-            -target.top_speed,
-        )
-        new_position = current_position + velocity * time_step.total_seconds()
-        return max(0, min(new_position, map_width))
+def describe_lanes(target_map: Map, heat_points: pl.DataFrame) -> pl.DataFrame:
+    """
+    Describe the lanes on the map based on the heat points.
 
-    def generate_position_series(
-        map_width: float, duration: timedelta, time_step: timedelta
-    ) -> pl.Series:
-        """
-        Generate a series of target positions over time.
+    Args:
+        target_map (Map): The map on which the lanes are located.
+        heat_points (pl.DataFrame): The heat points on the map.
 
-        Args:
-            map_width (float): The width of the map for position constraints.
-        Returns:
-            pl.Series: A series of target positions over time.
-        """
-        positions = []
-        current_position = npr.uniform(0, map_width)
-        for _ in range(
-            int(duration.total_seconds() / time_step.total_seconds())
-        ):  # Simulate for 1 minute
-            current_position = update_target_position(
-                current_position, map_width, time_step
-            )
-            positions.append(current_position)
-        return pl.Series(positions, dtype=pl.Float64)
+    Returns:
+        pl.DataFrame: A DataFrame containing the description of the lanes.
+    """
+    return pl.DataFrame(
+        {
+            "lane_id": pl.arange(0, target_map.num_heat_points),
+            "x_start": heat_points["x"],
+            "y_start": heat_points["y"],
+            "x_end": heat_points["x"]
+            .shift(-1)
+            .fill_null(heat_points["x"].first()),
+            "y_end": heat_points["y"]
+            .shift(-1)
+            .fill_null(heat_points["y"].first()),
+            "traffic_density": npr.uniform(
+                0, 1, target_map.num_heat_points
+            ),  # Random traffic density
+            "traffic_stddev": npr.uniform(
+                0.1, 0.5, target_map.num_heat_points
+            ),  # Random traffic variability
+        }
+    )
 
-    def calc_behavior_over_time(
-        start_time: datetime, duration: timedelta, time_step: timedelta
-    ) -> pl.DataFrame:
-        """
-        Generate the target's behavior over the specified time range.
 
-        Args:
-            time_range (tuple[datetime, timedelta]): A tuple containing the start time and duration for the behavior generation.
-        Returns:
-            pl.DataFrame: A DataFrame containing the target's behavior data over time.
-        """
-        end_time = start_time + duration
-        behavior = pl.DataFrame(
+def map_lane_traffic(
+    target_map: Map, lanes: pl.DataFrame
+) -> Generator[pl.LazyFrame, None, None]:
+    """
+    Map the traffic on the lanes based on the traffic density and variability.
+
+    Args:
+        target_map (Map): The map on which the lanes are located.
+        lanes (pl.DataFrame): The DataFrame containing the description of the lanes.
+
+    Returns:
+        pl.DataFrame: A DataFrame containing the mapped traffic on the lanes.
+    """
+    x_values = pl.linear_space(0, target_map.map_size, target_map.resolution)
+    y_values = pl.linear_space(0, target_map.map_size, target_map.resolution)
+
+    lane_indices = pl.Series(
+        "lane_idx", pl.arange(0, target_map.num_heat_points)
+    )
+    for i in lane_indices:
+        q1 = pl.DataFrame(
             {
-                "timestamp": pl.time_range(
-                    start=start_time.time(),
-                    end=end_time.time(),
-                    interval=duration,
-                    eager=True,
-                ),
-                "x_position": pl.Series(
-                    generate_position_series(
-                        map_width=100.0, duration=duration, time_step=time_step
-                    )
-                ),
-                "y_position": pl.Series(
-                    generate_position_series(
-                        map_width=100.0, duration=duration, time_step=time_step
-                    )
-                ),
+                "x": x_values.slice(lanes[i, "x_start"], lanes[i, "x_end"]),
+                "y": y_values.slice(lanes[i, "y_start"], lanes[i, "y_end"]),
             }
-        )
-        return behavior
-
-    return calc_behavior_over_time
+        ).lazy()
+        q2 = (
+            q1.select(pl.col("x"))
+            .join(q1.select(pl.col("y")), how="cross")
+            .with_columns(
+                (
+                    pl.col("x") * (lanes[i, "y_end"] - lanes[i, "y_start"])
+                    - pl.col("y") * (lanes[i, "x_end"] - lanes[i, "x_start"])
+                    + lanes[i, "y_start"] * lanes[i, "x_end"]
+                    - lanes[i, "y_end"] * lanes[i, "x_start"]
+                )
+                .abs()
+                .alias("dist_to_lane")
+            )
+        ).lazy()
+        q3 = q2.with_columns(
+            (
+                lanes[i, "traffic_density"]
+                * np.exp(
+                    -0.5
+                    * (pl.col("dist_to_lane") ** 2 / lanes[i, "traffic_stddev"])
+                    ** 2
+                )
+            ).alias("traffic")
+        ).lazy()
+        yield q3

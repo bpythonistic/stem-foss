@@ -173,7 +173,7 @@ class Stats(SQLModel, table=True):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    user_id: str = Field(...)
+    user_id: str = Field(..., foreign_key="user.id")
     stat_type: Stat = Field(...)
     stat_min: float = Field(default=0, ge=0)
     stat_max: float = Field(..., gt=1)
@@ -195,7 +195,7 @@ class Upgrade(SQLModel, table=True):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    user_id: str = Field(...)
+    user_id: str = Field(..., foreign_key="user.id")
     name: str = Field(...)
     description: str = Field(...)
     cost: int = Field(..., ge=0)
@@ -238,7 +238,7 @@ class Target(SQLModel, table=True):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    user_id: str = Field(...)
+    user_id: str = Field(..., foreign_key="user.id")
     name: str = Field(...)
     description: str = Field(...)
     category: TargetClass = Field(...)
@@ -251,6 +251,74 @@ class Target(SQLModel, table=True):
     loot_max: float = Field(..., gt=0)
     loot_mean: float | None = Field(default=None, gt=0)
     loot_stddev: float | None = Field(default=None, ge=0)
+
+
+class Map(SQLModel, table=True):
+    """
+    Represents a map in the system.
+
+    Attributes:
+        id (str): Unique identifier for the map entry, generated using UUID4.
+        user_id (str): The ID of the user to whom this map belongs.
+        name (str): The name of the map.
+        description (str): A brief description of the map.
+        map_size (float): The size of the map, with a constraint to ensure it's
+            greater than 0.
+        resolution (int): The resolution of the map, with a constraint to ensure it's
+            greater than 0.
+        num_targets (int): The number of targets on the map, with a constraint
+            to ensure it's greater than 0.
+        num_heat_points (int): The number of heat points on the map, with a
+            constraint to ensure it's greater than 0.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    user_id: str = Field(..., foreign_key="user.id")
+    name: str = Field(...)
+    description: str = Field(...)
+    map_size: float = Field(..., gt=0)
+    resolution: int = Field(..., gt=0)
+    num_targets: int = Field(..., gt=0)
+    num_heat_points: int = Field(..., gt=0)
+
+
+class MapHeatPoint(SQLModel, table=True):
+    """
+    Represents a heat point on a map in the system.
+
+    Attributes:
+        id (str): Unique identifier for the heat point entry, generated using UUID4.
+        map_id (str): The ID of the map to which this heat point belongs.
+        x (float): The x-coordinate of the heat point, with a constraint to
+            ensure it's greater than or equal to 0.
+        y (float): The y-coordinate of the heat point, with a constraint to
+            ensure it's greater than or equal to 0.
+        visit_duration (float): The duration of visits to this heat point, with
+            a constraint to ensure it's greater than or equal to 0.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    map_id: str = Field(..., foreign_key="map.id")
+    x: float = Field(..., ge=0)
+    y: float = Field(..., ge=0)
+    visit_duration: float = Field(..., ge=0)
+
+
+class MapLane(SQLModel, table=True):
+    """
+    Represents a lane on a map in the system.
+
+    Attributes:
+        id (str): Unique identifier for the lane entry, generated using UUID4.
+        map_id (str): The ID of the map to which this lane belongs.
+        start_point_id (str): The ID of the starting heat point for this lane.
+        end_point_id (str): The ID of the ending heat point for this lane.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    map_id: str = Field(..., foreign_key="map.id")
+    start_point_id: str = Field(..., foreign_key="mapheatpoint.id")
+    end_point_id: str = Field(..., foreign_key="mapheatpoint.id")
 
 
 def get_session() -> Generator[Session, None, None]:
