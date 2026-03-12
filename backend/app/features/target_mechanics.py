@@ -77,9 +77,7 @@ def generate_random_target(target_class: TargetClass, user_id: str) -> Target:
             raise ValueError(f"Invalid target class: {target_class}")
 
 
-def generate_map_heat_points(
-    target_map: Map, margin: float = 5.00
-) -> pl.DataFrame:
+def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFrame:
     """
     Generate random heat points for the map.
 
@@ -126,12 +124,8 @@ def describe_lanes(target_map: Map, heat_points: pl.DataFrame) -> pl.DataFrame:
             "lane_id": pl.arange(0, target_map.num_heat_points),
             "x_start": heat_points["x"],
             "y_start": heat_points["y"],
-            "x_end": heat_points["x"]
-            .shift(-1)
-            .fill_null(heat_points["x"].first()),
-            "y_end": heat_points["y"]
-            .shift(-1)
-            .fill_null(heat_points["y"].first()),
+            "x_end": heat_points["x"].shift(-1).fill_null(heat_points["x"].first()),
+            "y_end": heat_points["y"].shift(-1).fill_null(heat_points["y"].first()),
             "traffic_density": npr.uniform(0, 1, target_map.num_heat_points)
             * (
                 target_map.num_targets / target_map.num_heat_points
@@ -159,9 +153,7 @@ def map_lane_traffic(
     x_values = pl.linear_space(0, target_map.map_size, target_map.resolution)
     y_values = pl.linear_space(0, target_map.map_size, target_map.resolution)
 
-    lane_indices = pl.Series(
-        "lane_idx", pl.arange(0, target_map.num_heat_points)
-    )
+    lane_indices = pl.Series("lane_idx", pl.arange(0, target_map.num_heat_points))
     for i in lane_indices:
         q1 = pl.DataFrame(
             {
@@ -188,10 +180,7 @@ def map_lane_traffic(
                 lanes[i, "traffic_density"]
                 * np.exp(
                     -0.5
-                    * (
-                        pl.col("dist_to_lane") ** 2
-                        / lanes[i, "traffic_stddev"] ** 2
-                    )
+                    * (pl.col("dist_to_lane") ** 2 / lanes[i, "traffic_stddev"] ** 2)
                 )
             ).alias("traffic")
         ).lazy()
@@ -212,9 +201,7 @@ def calculate_temporal_lane_traffic(
     Returns:
         pl.DataFrame: A DataFrame containing the temporal lane traffic.
     """
-    lane_indices = pl.Series(
-        "lane_idx", pl.arange(0, target_map.num_heat_points)
-    )
+    lane_indices = pl.Series("lane_idx", pl.arange(0, target_map.num_heat_points))
     time_series = pl.Series(
         "time",
         pl.linear_space(
@@ -241,8 +228,7 @@ def calculate_temporal_lane_traffic(
                         * 5
                         * np.exp(
                             -0.5
-                            * (rush_hour_df[j, "rush_hour_times"] - time_series)
-                            ** 2
+                            * (rush_hour_df[j, "rush_hour_times"] - time_series) ** 2
                             / (60 * 60) ** 2
                         )
                     ),
