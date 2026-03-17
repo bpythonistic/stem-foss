@@ -80,7 +80,7 @@ pixi run update-nodejs
 
 The game client will be available at [http://localhost:5173](http://localhost:5173)
 
-### Database Setup
+### Database Setup (not yet implemented)
 
 Ensure PostgreSQL is not already globally installed and running before proceeding.
 
