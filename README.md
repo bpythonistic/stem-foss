@@ -22,75 +22,6 @@ A FOSS application that gamifies STEM
 
 ---
 
-## Application Requirements
-
-### Objective
-
-To learn Probability Density Functions (PDFs) through analysis of randomized drone behavior in order to capture and gain loot and progress.
-
-### Initial Backend API
-
-1. Simulate semi-random drone behavior in NumPy/SciPy.
-2. Calculate the PDF trend over time.
-3. Generate a visualization of the PDF using Seaborn.
-4. Convert Seaborn plot to HTML with mpld3 to send to the frontend.
-5. Interact with the PostgreSQL database to save/fetch the user's traits, stats, upgrades, etc.
-6. Provide API endpoints to the frontend.
-
-### Frontend Prototype
-
-1. Generate or load a 2D Leaflet map.
-2. Overlay map with the PDFs obtained from the backend API.
-3. Display the user's traits, stats, upgrades, etc. retrieved from the backend.
-
-### UI/UX Prototype Design
-
-1. Render the 2D map with a PDF overlay that can be enabled/disabled via a checkbox.
-2. Provide a UI form for user setup.
-3. Design the UI for displaying and interacting with user traits, stats, upgrades, etc.
-
-### Database Schema
-
-- Users table
-  - Id
-  - Name
-  - Class_Name
-- Classes table
-  - Id
-  - Name
-  - Trait_1
-  - Trait_2
-  - Trait_3
-- Traits table
-  - Id
-  - Category
-  - Name
-  - Modifies
-  - Scaling_Funct
-- Stats table
-  - Id
-  - User_Id
-  - Stat_Type
-  - Stat_Bounds
-  - Base_Value
-  - Current_Value
-- Upgrades table
-  - Id
-  - Name
-  - Cost
-  - Effected_Stat
-  - Effect_Funct
-- Targets table
-  - Id
-  - Category
-  - Top_Speed
-  - Accel_Max
-  - Decel_Max
-  - Hit_Box
-  - Loot_Dist
-
-### Other Requirements
-
 ## 🛠 Tech Stack
 
 ### Backend (The Physics Engine)
@@ -114,7 +45,7 @@ To learn Probability Density Functions (PDFs) through analysis of randomized dro
 
 ## 🚀 Getting Started
 
-**Note: An app prototype is planned, but nothing runs for now.**
+**Note: The development environment and folder structure has NOT been set up yet.**
 
 ### Prerequisites
 
