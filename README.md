@@ -45,7 +45,7 @@ A FOSS application that gamifies STEM
 
 ## 🚀 Getting Started
 
-**Note: The development environment and folder structure has NOT been set up yet.**
+**Note: An app prototype is planned, but nothing runs for now.**
 
 ### Prerequisites
 
