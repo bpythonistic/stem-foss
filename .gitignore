@@ -1,0 +1,10 @@
+node_modules/
+dist/
+**/*/__pycache__/
+.env
+.vscode
+postgresql/
+.coverage
+*.db# pixi environments
+.pixi/*
+!.pixi/config.toml
