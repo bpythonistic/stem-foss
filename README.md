@@ -54,6 +54,84 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 
 ---
 
+## Application Requirements
+
+### Objective
+
+To learn Probability Density Functions (PDFs) through analysis of randomized drone behavior in order to capture and gain loot and progress.
+
+### Initial Backend API
+
+1. Simulate semi-random drone behavior in NumPy/SciPy.
+2. Calculate the PDF trend over time.
+3. Generate a visualization of the PDF using Seaborn.
+4. Convert Seaborn plot to HTML with mpld3 to send to the frontend.
+5. Interact with the PostgreSQL database to save/fetch the user's traits, stats, upgrades, etc.
+6. Provide API endpoints to the frontend.
+
+### Frontend Prototype
+
+1. Generate or load a 2D Leaflet map.
+2. Overlay map with the PDFs obtained from the backend API.
+3. Display the user's traits, stats, upgrades, etc. retrieved from the backend.
+
+### UI/UX Prototype Design
+
+1. Render the 2D map with a PDF overlay that can be enabled/disabled via a checkbox.
+2. Provide a UI form for user setup.
+3. Design the UI for displaying and interacting with user traits, stats, upgrades, etc.
+
+### Database Schema
+
+- Users table
+  - Id
+  - Name
+  - Class_Name
+- Classes table
+  - Id
+  - Name
+  - Description
+  - Trait_1
+  - Trait_2
+  - Trait_3
+- Traits table
+  - Id
+  - Name
+  - Description
+  - Category
+  - Modifies
+  - Multiplier
+  - Offset
+- Stats table
+  - Id
+  - User_Id
+  - Stat_Type
+  - Stat_Min
+  - Stat_Max
+  - Base_Value
+  - Current_Value
+- Upgrades table
+  - Id
+  - Name
+  - Cost
+  - Effected_Stat
+  - Stat_Multiplier
+  - Stat_Offset
+- Targets table
+  - Id
+  - Category
+  - Top_Speed
+  - Accel_Max
+  - Decel_Max
+  - Hit_Box
+  - Loot_Dist
+  - Loot_Min
+  - Loot_Max
+  - Loot_Mean
+  - Loot_StdDev
+
+### Other Requirements
+
 ## 🛠 Tech Stack
 
 ### Backend (The Physics Engine)
@@ -61,6 +139,8 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 - **Language:** Python 3.14
 - **Framework:** FastAPI
 - **Math Kernel:** NumPy / SciPy (for generating and analyzing semi-random drone behavior)
+- **Data Manipulation:** Polars
+- **Plotting:** Seaborn / mpld3 (for generating plots of Probability Density Functions and converting them to HTML)
 - **Database:** PostgreSQL
 - **ORM:** SQLAlchemy / SQLModel
 - **Package Manager:** [Pixi](https://pixi.prefix.dev/latest/)
@@ -70,12 +150,12 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 - **Language:** TypeScript 5
 - **Framework:** React
 - **Build Tool:** Vite
-- **Visualization:** TBD (map/graphics rendering tools like [Top 5 map libraries for React](https://it-waves.com/blogs/top-5-map-libraries-for-react-in-2024))
+- **Visualization:** React Leaflet (for rendering 2D maps with drone locations)
 - **State Management:** React Hooks / Context API
 
 ## 🚀 Getting Started
 
-**Note: The development environment and folder structure has NOT been set up yet.**
+**Note: An app prototype is planned, but nothing runs for now.**
 
 ### Prerequisites
 
@@ -110,7 +190,7 @@ pixi run update-nodejs
 
 The game client will be available at [http://localhost:5173](http://localhost:5173)
 
-### Database Setup
+### Database Setup (not yet implemented)
 
 Ensure PostgreSQL is not already globally installed and running before proceeding.
 
