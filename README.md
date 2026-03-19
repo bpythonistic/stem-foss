@@ -38,19 +38,27 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 
   - **Stats & Upgrades**: Purchase better hardware to modify base stats, such as increasing sensor sampling rates, buying heavier nets that fall faster (reducing lead time), or upgrading UAV batteries for longer loiter times.
 
-### Development Roadmap (TBD)
+### Development Roadmap
 
-#### Phase I
+#### Phase I: The Core Physics & UI Loop
 
-- [ ] First objective
+- [ ] **Backend Math Engine**: Implement the spatial parametric curves and temporal modulation in Python/Polars to generate dynamic PDFs.
 
-#### Phase II
+- [ ] **Frontend Map Integration**: Render the Leaflet 2D map and overlay the downsampled PDF heatmap.
 
-### Frontend Web UI
+- [ ] **Time-Scrubbing UI**: Build the interactive timeline slider in React to allow users to observe PDF shifts over a 24-hour simulation cycle.
 
-### Backend API
+- [ ] **Basic Interception Logic**: Create the FastAPI endpoint to validate a "Drop Net" event based on target coordinates, net radius, and time of impact.
 
-### PostgreSQL Database
+#### Phase II: RPG Mechanics & Persistence
+
+- [ ] **Database Initialization**: Spin up PostgreSQL with SQLModel for the Users, Stats, and Targets schemas.
+
+- [ ] **Loot Distribution System**: Implement the NumPy/SciPy logic to generate randomized loot drops based on the target's specific Gaussian distribution parameters.
+
+- [ ] **Loadout Management**: Build the frontend UI forms for players to view their Traits, spend loot on Upgrades, and see how it modifies their base interception stats.
+
+- [ ] **Target Tiering**: Introduce Small, Medium, and Large target classes with varying speed and acceleration profiles, requiring different predictive strategies.
 
 ---
 
@@ -201,9 +209,9 @@ pixi run create-db
 ## 🤝 Contributing
 
 1. Fork the project
-2. Create your feature branch (git checkout -b feature/AmazingFeature)
-3. Commit your changes (git commit -m 'Add some AmazingFeature')
-4. Push to the branch (git push origin feature/AmazingFeature)
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Ensure that the GitHub Actions pass
 6. Open a Pull Request
 
