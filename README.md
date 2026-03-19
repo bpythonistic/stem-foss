@@ -144,22 +144,35 @@ To learn Probability Density Functions (PDFs) through analysis of randomized dro
 
 ### Backend (The Physics Engine)
 
-- **Language:** Python 3.14
-- **Framework:** FastAPI
-- **Math Kernel:** NumPy / SciPy (for generating and analyzing semi-random drone behavior)
-- **Data Manipulation:** Polars
-- **Plotting:** Seaborn / mpld3 (for generating plots of Probability Density Functions and converting them to HTML)
-- **Database:** PostgreSQL
-- **ORM:** SQLAlchemy / SQLModel
+- **Language:** `Python 3.14`
+- **Framework:** `FastAPI`
+- **Dev API Server:** `uvicorn`
+- **Math Kernel:** `NumPy` / `SciPy` (for generating and analyzing semi-random drone behavior)
+- **Data Manipulation:** `Polars`
+- **Database:** `PostgreSQL`
+- **ORM:** `SQLAlchemy` / `SQLModel`
+- **Unit tests:** `pytest`
 - **Package Manager:** [Pixi](https://pixi.prefix.dev/latest/)
 
 ### Frontend (The 2D Map and UI)
 
-- **Language:** TypeScript 5
-- **Framework:** React
-- **Build Tool:** Vite
-- **Visualization:** React Leaflet (for rendering 2D maps with drone locations)
+- **Language:** `TypeScript 5`
+- **Framework:** `React`
+- **Build Tool:** `Vite`
+- **Visualization:** `Apache ECharts` (for rendering streamed target traffic heatmaps to overlay over a generated 2D game map)
 - **State Management:** React Hooks / Context API
+- **Unit tests:** `jest`
+
+### CI/CD
+
+- **Automatic Actions on `Git` Commits:**
+  - `pre-commit` (performs `Python` formatting with `Ruff`)
+  - `Husky` (performs formatting with `Prettier` on `TypeScript` files and other supported text files)
+- **GitHub Actions:** (not implemented yet)
+  - `Ruff` (`Python` linter)
+  - `ESLint` (`TypeScript` linter)
+  - `pytest` (backend unit tests)
+  - `jest` (frontend unit tests)
 
 ## 🚀 Getting Started
 
