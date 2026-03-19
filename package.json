@@ -23,7 +23,8 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "**/*.{js,jsx,ts,tsx}": "prettier --write ."
+    "**/*.{js,jsx,ts,tsx}": "prettier --write .",
+    "**/*.{toml,txt,json,html,css}": "prettier --write ."
   },
   "dependencies": {
     "baseline-browser-mapping": "^2.10.0",

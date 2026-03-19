@@ -15,70 +15,71 @@ import polars as pl
 
 from app.schemas.sqlmodels import Target, TargetClass, LootDist, Map
 
+npr.seed(42)  # Set a fixed seed for reproducibility
 
-def generate_random_target(target_class: TargetClass, user_id: str) -> Target:
+
+def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
     """
-    Generate a random target based on the specified target class.
+    Get the target configuration based on the target class.
 
     Args:
-        target_class (TargetClass): The class of the target to generate.
+        user_id (str): The ID of the user for whom to generate the target.
     Returns:
-        Target: A randomly generated target object.
+        tuple[Target, Target, Target]: A tuple containing the target
+        configurations for small, medium, and large targets.
     """
-    match target_class:
-        case TargetClass.SMALL:
-            return Target(
-                user_id=user_id,
-                name="Small Target",
-                description="A small target with high agility.",
-                category=target_class,
-                top_speed=10.0,
-                accel_max=5.0,
-                decel_max=-5.0,
-                hitbox_size=0.5,
-                loot_dist=LootDist.GAUSSIAN,
-                loot_min=3,
-                loot_max=8,
-                loot_mean=5,
-                loot_stddev=1,
-            )
-        case TargetClass.MEDIUM:
-            return Target(
-                user_id=user_id,
-                name="Medium Target",
-                description="A medium target with balanced stats.",
-                category=target_class,
-                top_speed=8.0,
-                accel_max=4.0,
-                decel_max=-4.0,
-                hitbox_size=1.0,
-                loot_dist=LootDist.GAUSSIAN,
-                loot_min=5,
-                loot_max=12,
-                loot_mean=8,
-                loot_stddev=2,
-            )
-        case TargetClass.LARGE:
-            return Target(
-                user_id=user_id,
-                name="Large Target",
-                description="A large target with low agility.",
-                category=target_class,
-                top_speed=6.0,
-                accel_max=3.0,
-                decel_max=-3.0,
-                hitbox_size=1.5,
-                loot_dist=LootDist.GAUSSIAN,
-                loot_min=8,
-                loot_max=15,
-                loot_mean=11,
-                loot_stddev=2,
-            )
-        case _:
-            raise ValueError(f"Invalid target class: {target_class}")
+    return (
+        Target(
+            user_id=user_id,
+            name="Small Target",
+            description="A small target with high agility.",
+            category=TargetClass.SMALL,
+            top_speed=10.0,
+            accel_max=5.0,
+            decel_max=-5.0,
+            hitbox_size=0.5,
+            loot_dist=LootDist.GAUSSIAN,
+            loot_min=3,
+            loot_max=8,
+            loot_mean=5,
+            loot_stddev=1,
+        ),
+        Target(
+            user_id=user_id,
+            name="Medium Target",
+            description="A medium target with balanced stats.",
+            category=TargetClass.MEDIUM,
+            top_speed=8.0,
+            accel_max=4.0,
+            decel_max=-4.0,
+            hitbox_size=1.0,
+            loot_dist=LootDist.GAUSSIAN,
+            loot_min=5,
+            loot_max=12,
+            loot_mean=8,
+            loot_stddev=2,
+        ),
+        Target(
+            user_id=user_id,
+            name="Large Target",
+            description="A large target with low agility.",
+            category=TargetClass.LARGE,
+            top_speed=6.0,
+            accel_max=3.0,
+            decel_max=-3.0,
+            hitbox_size=1.5,
+            loot_dist=LootDist.GAUSSIAN,
+            loot_min=8,
+            loot_max=15,
+            loot_mean=11,
+            loot_stddev=2,
+        ),
+    )
 
 
-def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFrame:
+def generate_map_heat_points(
+    target_map: Map, margin: float = 5.00
+) -> pl.DataFrame:
     """
     Generate random heat points for the map.
 
@@ -109,30 +110,60 @@ def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFr
     )
 
 
-def describe_lanes(target_map: Map, heat_points: pl.DataFrame) -> pl.DataFrame:
+def describe_lanes(
+    target_map: Map,
+    heat_points: pl.DataFrame,
+    target_specs: Target,
+    stddev_factor: float = 0.2,
+) -> pl.DataFrame:
     """
     Describe the lanes on the map based on the heat points.
 
     Args:
         target_map (Map): The map on which the lanes are located.
         heat_points (pl.DataFrame): The heat points on the map.
+        target_specs (Target): The specifications for the targets
+            for which to describe lanes.
+        stddev_factor (float): A factor to scale the standard
+            deviation of traffic variability. Default is 0.2,
+            which means the variability will be 20% of the
+            maximum possible variability based on the target's
+            speed and acceleration.
 
     Returns:
         pl.DataFrame: A DataFrame containing the description of the lanes.
     """
+
+    match target_specs.category:
+        case TargetClass.SMALL:
+            total_targets = target_map.num_small_targets
+        case TargetClass.MEDIUM:
+            total_targets = target_map.num_medium_targets
+        case TargetClass.LARGE:
+            total_targets = target_map.num_large_targets
+        case _:
+            raise ValueError("Invalid target category")
+    max_stddev = (
+        stddev_factor * (target_specs.top_speed * target_specs.accel_max) ** 0.5
+    )
+
     return pl.DataFrame(
         {
             "lane_id": pl.arange(0, target_map.num_heat_points),
             "x_start": heat_points["x"],
             "y_start": heat_points["y"],
-            "x_end": heat_points["x"].shift(-1).fill_null(heat_points["x"].first()),
-            "y_end": heat_points["y"].shift(-1).fill_null(heat_points["y"].first()),
+            "x_end": heat_points["x"]
+            .shift(-1)
+            .fill_null(heat_points["x"].first()),
+            "y_end": heat_points["y"]
+            .shift(-1)
+            .fill_null(heat_points["y"].first()),
             "traffic_density": npr.uniform(0, 1, target_map.num_heat_points)
             * (
-                target_map.num_targets / target_map.num_heat_points
+                total_targets / target_map.num_heat_points
             ),  # Random traffic density
             "traffic_stddev": npr.uniform(
-                0.1, 0.5, target_map.num_heat_points
+                0.1 * max_stddev, max_stddev, target_map.num_heat_points
             ),  # Random traffic variability
         }
     )
@@ -140,7 +171,7 @@ def describe_lanes(target_map: Map, heat_points: pl.DataFrame) -> pl.DataFrame:
 
 def map_lane_traffic(
     target_map: Map, lanes: pl.DataFrame
-) -> Generator[pl.LazyFrame, None, None]:
+) -> Generator[tuple[pl.LazyFrame, pl.LazyFrame], None, None]:
     """
     Map the traffic on the lanes based on the traffic density and variability.
 
@@ -149,7 +180,8 @@ def map_lane_traffic(
         lanes (pl.DataFrame): The DataFrame containing the description of the lanes.
 
     Returns:
-        pl.DataFrame: A DataFrame containing the mapped traffic on the lanes.
+        Generator: A generator that yields DataFrames
+            containing the traffic mapped on the lanes and the grid points.
     """
     x_values = pl.Series(
         "x_values",
@@ -160,21 +192,25 @@ def map_lane_traffic(
         pl.linear_space(0, target_map.map_size, target_map.resolution),
     )
 
-    lane_indices = pl.Series("lane_idx", pl.arange(0, target_map.num_heat_points))
+    lane_indices = pl.Series(
+        "lane_idx", pl.arange(0, target_map.num_heat_points)
+    )
+    q1 = (
+        pl.DataFrame({"x": x_values})
+        .select(pl.col("x").alias("x"))
+        .join(pl.DataFrame({"y": y_values}), how="cross")
+        .select(pl.col("x"), pl.col("y").alias("y"))
+        .lazy()
+    )
     for i in lane_indices:
-        q1 = (
-            pl.DataFrame({"x": x_values})
-            .select(pl.col("x").alias("x"))
-            .join(pl.DataFrame({"y": y_values}), how="cross")
-            .select(pl.col("x"), pl.col("y").alias("y"))
-            .lazy()
-        )
         q2 = q1.with_columns(
             {
                 "dist_to_lane": pl.Series(
                     "dist_to_lane",
-                    pl.col("x") * (lanes.item(i, "y_end") - lanes.item(i, "y_start"))
-                    - pl.col("y") * (lanes.item(i, "x_end") - lanes.item(i, "x_start"))
+                    pl.col("x")
+                    * (lanes.item(i, "y_end") - lanes.item(i, "y_start"))
+                    - pl.col("y")
+                    * (lanes.item(i, "x_end") - lanes.item(i, "x_start"))
                     + lanes.item(i, "y_start") * lanes.item(i, "x_end")
                     - lanes.item(i, "y_end") * lanes.item(i, "x_start"),
                 ).abs()
@@ -197,7 +233,7 @@ def map_lane_traffic(
                 )
             }
         ).lazy()
-        yield q3
+        yield q3, q1
 
 
 def calculate_temporal_lane_traffic(
@@ -223,7 +259,9 @@ def calculate_temporal_lane_traffic(
     Returns:
         pl.DataFrame: A DataFrame containing the temporal lane traffic.
     """
-    lane_indices = pl.Series("lane_idx", pl.arange(0, target_map.num_heat_points))
+    lane_indices = pl.Series(
+        "lane_idx", pl.arange(0, target_map.num_heat_points)
+    )
     time_series = pl.Series(
         "time",
         pl.linear_space(start_time, start_time + duration, time_steps),
@@ -248,7 +286,10 @@ def calculate_temporal_lane_traffic(
                         * 5
                         * np.exp(
                             -0.5
-                            * (rush_hour_df.item(j, "rush_hour_times") - time_series)
+                            * (
+                                rush_hour_df.item(j, "rush_hour_times")
+                                - time_series
+                            )
                             ** 2
                             / (60 * 60) ** 2
                         )
@@ -270,7 +311,7 @@ def evaluate_total_pdf(
     start_time: datetime,
     duration: timedelta,
     time_steps: int,
-) -> Callable[[datetime, float], Generator[pl.LazyFrame, None, None]]:
+) -> Callable[[datetime], pl.LazyFrame]:
     """
     Evaluate the total PDF state of the map by combining lane and temporal traffic.
 
@@ -285,26 +326,60 @@ def evaluate_total_pdf(
         time_steps (int): The number of time steps to evaluate.
 
     Returns:
-        Callable[[datetime, float], Generator[pl.LazyFrame, None, None]]:
-            A callable that takes a datetime and a tolerance value,
-            and returns a generator of LazyFrames containing the
-            total PDF state of the map with columns for x, y, time,
-            and the combined PDF value.
+        Callable:
+            A function that takes a datetime and returns a generator of LazyFrames
+            containing the total PDF state of the map at that time.
     """
 
-    def total_pdf_at_time(
-        current_time: datetime, tol: float
+    def total_pdf_at_time_per_lane(
+        current_time: datetime,
     ) -> Generator[pl.LazyFrame, None, None]:
-        for lane_traffic, temporal_traffic in zip(
+        """
+        Evaluate the total PDF state of the map at a specific time.
+
+        Args:
+            current_time (datetime): The time at which to evaluate the PDF.
+
+        Returns:
+            Generator: A generator of LazyFrames containing the total PDF
+                state of the map at the specified time.
+        """
+        for (lane_traffic, grid_points), temporal_traffic in zip(
             map_lane_traffic(target_map, lanes),
             calculate_temporal_lane_traffic(
                 target_map, lanes, start_time, duration, time_steps
             ),
         ):
-            yield lane_traffic.join(
-                temporal_traffic.filter((pl.col("time") - current_time).abs() < tol),
-                on="time",
-                how="cross",
-            ).with_columns({"pdf": pl.col("traffic") * pl.col("total_traffic")})
+            yield grid_points.with_columns(
+                {
+                    "pdf": lane_traffic.join(
+                        temporal_traffic.filter(
+                            (pl.col("time") - current_time).abs()
+                            < 2 * duration / time_steps
+                        ),
+                        on="time",
+                        how="cross",
+                    ).select(
+                        pl.col("traffic") * pl.col("total_traffic").alias("pdf")
+                    ),
+                }
+            ).lazy()
+
+    def total_pdf_at_time(current_time: datetime) -> pl.LazyFrame:
+        """
+        Evaluate the total PDF state of the map at a specific time.
+
+        Args:
+            current_time (datetime): The time at which to evaluate the PDF.
+
+        Returns:
+            Generator: A generator of LazyFrames containing the total PDF
+                state of the map at the specified time.
+        """
+        return (
+            pl.concat(list(total_pdf_at_time_per_lane(current_time)))
+            .group_by(["x", "y"])
+            .agg(pl.sum("pdf").alias("total_pdf"))
+        )
 
     return total_pdf_at_time

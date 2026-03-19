@@ -266,7 +266,11 @@ class Map(SQLModel, table=True):
             greater than 0.
         resolution (int): The resolution of the map, with a constraint to ensure it's
             greater than 0.
-        num_targets (int): The number of targets on the map, with a constraint
+        num_small_targets (int): The number of small targets on the map, with a constraint
+            to ensure it's greater than 0.
+        num_medium_targets (int): The number of medium targets on the map, with a constraint
+            to ensure it's greater than 0.
+        num_large_targets (int): The number of large targets on the map, with a constraint
             to ensure it's greater than 0.
         num_heat_points (int): The number of heat points on the map, with a
             constraint to ensure it's greater than 0.
@@ -278,7 +282,9 @@ class Map(SQLModel, table=True):
     description: str = Field(...)
     map_size: float = Field(..., gt=0)
     resolution: int = Field(..., gt=0)
-    num_targets: int = Field(..., gt=0)
+    num_small_targets: int = Field(..., gt=0)
+    num_medium_targets: int = Field(..., gt=0)
+    num_large_targets: int = Field(..., gt=0)
     num_heat_points: int = Field(..., gt=0)
 
 
@@ -301,24 +307,6 @@ class MapHeatPoint(SQLModel, table=True):
     map_id: str = Field(..., foreign_key="map.id")
     x: float = Field(..., ge=0)
     y: float = Field(..., ge=0)
-    visit_duration: float = Field(..., ge=0)
-
-
-class MapLane(SQLModel, table=True):
-    """
-    Represents a lane on a map in the system.
-
-    Attributes:
-        id (str): Unique identifier for the lane entry, generated using UUID4.
-        map_id (str): The ID of the map to which this lane belongs.
-        start_point_id (str): The ID of the starting heat point for this lane.
-        end_point_id (str): The ID of the ending heat point for this lane.
-    """
-
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    map_id: str = Field(..., foreign_key="map.id")
-    start_point_id: str = Field(..., foreign_key="mapheatpoint.id")
-    end_point_id: str = Field(..., foreign_key="mapheatpoint.id")
 
 
 def get_session() -> Generator[Session, None, None]:
