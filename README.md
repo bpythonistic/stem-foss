@@ -4,7 +4,7 @@ A FOSS application that gamifies STEM
 
 ## 🎮 The Core Concept
 
-*Project Netfall* is a tactical interception simulator that bridges the gap between STEM education and RPG progression. Players take on the role of an independent interception contractor operating a high-altitude UAV. The objective is to ambush mid-sized autonomous courier drones carrying valuable loot through complex, semi-hidden urban "sky lanes."
+_Project Netfall_ is a tactical interception simulator that bridges the gap between STEM education and RPG progression. Players take on the role of an independent interception contractor operating a high-altitude UAV. The objective is to ambush mid-sized autonomous courier drones carrying valuable loot through complex, semi-hidden urban "sky lanes."
 
 Because the enemy drones are too fast and erratic for direct pursuit, players must rely on spatiotemporal analysis and kinematics. By deploying passive sensors, analyzing Probability Density Functions (PDFs) of drone traffic over time, and calculating the perfect drop physics, players spring traps from above.
 
@@ -33,7 +33,6 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 - **Goal**: Scale operations to capture higher-tier targets.
 
 - **Mechanic**: Captured targets yield rewards based on statistical distributions (`Loot_Mean`, `Loot_StdDev`). Players use this loot to invest in their loadout:
-
   - **Classes & Traits**: Select operator backgrounds that offer baseline multipliers to sensor range or net aerodynamics.
 
   - **Stats & Upgrades**: Purchase better hardware to modify base stats, such as increasing sensor sampling rates, buying heavier nets that fall faster (reducing lead time), or upgrading UAV batteries for longer loiter times.
