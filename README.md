@@ -4,21 +4,61 @@ A FOSS application that gamifies STEM
 
 ## 🎮 The Core Concept
 
-(To be completed)
+*Project Netfall* is a tactical interception simulator that bridges the gap between STEM education and RPG progression. Players take on the role of an independent interception contractor operating a high-altitude UAV. The objective is to ambush mid-sized autonomous courier drones carrying valuable loot through complex, semi-hidden urban "sky lanes."
 
-### Development Roadmap (TBD)
+Because the enemy drones are too fast and erratic for direct pursuit, players must rely on spatiotemporal analysis and kinematics. By deploying passive sensors, analyzing Probability Density Functions (PDFs) of drone traffic over time, and calculating the perfect drop physics, players spring traps from above.
 
-#### Phase I
+## Gameplay Objectives
 
-- [ ] First objective
+### 1. Deploy & Observe (Data Gathering)
 
-#### Phase II
+- **Goal**: Map the invisible sky lanes.
 
-### Frontend Web UI
+- **Mechanic**: Players deploy limited sensor nodes across a 2D topographical map. Over time, these sensors gather discrete data points on target movements, revealing high-traffic routes based on the target's `Category` and behavior profiles.
 
-### Backend API
+### 2. Analyze & Predict (Reading the PDF)
 
-### PostgreSQL Database
+- **Goal**: Identify temporal "choke points."
+
+- **Mechanic**: The game translates raw sensor data into a dynamic 2D Probability Density Function (PDF) heatmap. Players scrub through a timeline to see how the probability of a drone's location shifts throughout the day. The objective is to find the exact coordinates and time where the PDF variance (σ2) is lowest, indicating a highly predictable target location.
+
+### 3. Ambush & Capture (Kinematic Interception)
+
+- **Goal**: Execute a perfectly timed net drop.
+
+- **Mechanic**: Once an ambush point is selected, players position their UAV. When the target approaches, players must factor in target speed (`Top_Speed`), altitude, and net descent rate to calculate the exact release window. A successful capture occurs when the target intersects the net's hit radius at the time of impact.
+
+### 4. Extract & Upgrade (RPG Progression)
+
+- **Goal**: Scale operations to capture higher-tier targets.
+
+- **Mechanic**: Captured targets yield rewards based on statistical distributions (`Loot_Mean`, `Loot_StdDev`). Players use this loot to invest in their loadout:
+
+  - **Classes & Traits**: Select operator backgrounds that offer baseline multipliers to sensor range or net aerodynamics.
+
+  - **Stats & Upgrades**: Purchase better hardware to modify base stats, such as increasing sensor sampling rates, buying heavier nets that fall faster (reducing lead time), or upgrading UAV batteries for longer loiter times.
+
+### Development Roadmap
+
+#### Phase I: The Core Physics & UI Loop
+
+- [ ] **Backend Math Engine**: Implement the spatial parametric curves and temporal modulation in Python/Polars to generate dynamic PDFs.
+
+- [ ] **Frontend Map Integration**: Render the Leaflet 2D map and overlay the downsampled PDF heatmap.
+
+- [ ] **Time-Scrubbing UI**: Build the interactive timeline slider in React to allow users to observe PDF shifts over a 24-hour simulation cycle.
+
+- [ ] **Basic Interception Logic**: Create the FastAPI endpoint to validate a "Drop Net" event based on target coordinates, net radius, and time of impact.
+
+#### Phase II: RPG Mechanics & Persistence
+
+- [ ] **Database Initialization**: Spin up PostgreSQL with SQLModel for the Users, Stats, and Targets schemas.
+
+- [ ] **Loot Distribution System**: Implement the NumPy/SciPy logic to generate randomized loot drops based on the target's specific Gaussian distribution parameters.
+
+- [ ] **Loadout Management**: Build the frontend UI forms for players to view their Traits, spend loot on Upgrades, and see how it modifies their base interception stats.
+
+- [ ] **Target Tiering**: Introduce Small, Medium, and Large target classes with varying speed and acceleration profiles, requiring different predictive strategies.
 
 ---
 
@@ -169,9 +209,9 @@ pixi run create-db
 ## 🤝 Contributing
 
 1. Fork the project
-2. Create your feature branch (git checkout -b feature/AmazingFeature)
-3. Commit your changes (git commit -m 'Add some AmazingFeature')
-4. Push to the branch (git push origin feature/AmazingFeature)
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Ensure that the GitHub Actions pass
 6. Open a Pull Request
 
