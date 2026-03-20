@@ -264,7 +264,7 @@ class Map(SQLModel, table=True):
         description (str): A brief description of the map.
         map_size (float): The size of the map, with a constraint to ensure it's
             greater than 0.
-        resolution (int): The resolution of the map, with a constraint to ensure it's
+        samples (int): The number of samples for each dimension of the map, with a constraint to ensure it's
             greater than 0.
         num_small_targets (int): The number of small targets on the map, with a constraint
             to ensure it's greater than 0.
@@ -281,32 +281,11 @@ class Map(SQLModel, table=True):
     name: str = Field(...)
     description: str = Field(...)
     map_size: float = Field(..., gt=0)
-    resolution: int = Field(..., gt=0)
+    samples: int = Field(..., gt=0)
     num_small_targets: int = Field(..., gt=0)
     num_medium_targets: int = Field(..., gt=0)
     num_large_targets: int = Field(..., gt=0)
     num_heat_points: int = Field(..., gt=0)
-
-
-class MapHeatPoint(SQLModel, table=True):
-    """
-    Represents a heat point on a map in the system.
-
-    Attributes:
-        id (str): Unique identifier for the heat point entry, generated using UUID4.
-        map_id (str): The ID of the map to which this heat point belongs.
-        x (float): The x-coordinate of the heat point, with a constraint to
-            ensure it's greater than or equal to 0.
-        y (float): The y-coordinate of the heat point, with a constraint to
-            ensure it's greater than or equal to 0.
-        visit_duration (float): The duration of visits to this heat point, with
-            a constraint to ensure it's greater than or equal to 0.
-    """
-
-    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    map_id: str = Field(..., foreign_key="map.id")
-    x: float = Field(..., ge=0)
-    y: float = Field(..., ge=0)
 
 
 def get_session() -> Generator[Session, None, None]:

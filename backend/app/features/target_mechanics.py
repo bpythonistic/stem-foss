@@ -177,11 +177,11 @@ def map_lane_traffic(
     """
     x_values = pl.Series(
         "x_values",
-        pl.linear_space(0, target_map.map_size, target_map.resolution),
+        pl.linear_space(0, target_map.map_size, target_map.samples),
     )
     y_values = pl.Series(
         "y_values",
-        pl.linear_space(0, target_map.map_size, target_map.resolution),
+        pl.linear_space(0, target_map.map_size, target_map.samples),
     )
 
     lane_indices = pl.Series("lane_idx", pl.arange(0, target_map.num_heat_points))
@@ -245,7 +245,8 @@ def calculate_temporal_lane_traffic(
         time_steps (int): The number of time steps over a day to simulate.
 
     Returns:
-        pl.DataFrame: A DataFrame containing the temporal lane traffic.
+        Generator: A generator that yields LazyFrames
+            containing the temporal traffic patterns for each lane.
     """
     lane_indices = pl.Series("lane_idx", pl.arange(0, target_map.num_heat_points))
     time_series = pl.Series(
@@ -333,17 +334,35 @@ def evaluate_total_pdf(
                 target_map, lanes, start_time, duration, time_steps
             ),
         ):
-            yield grid_points.with_columns(
-                {
-                    "pdf": lane_traffic.join(
-                        temporal_traffic.filter(
-                            (pl.col("time") - current_time).abs()
-                            < 2 * duration / time_steps
+            yield (
+                grid_points.with_columns(
+                    {
+                        "current_traffic": temporal_traffic.filter(
+                            pl.col("total_traffic") > current_time
+                        ).select(
+                            pl.col("total_traffic").first().alias("current_traffic")
                         ),
-                        on="time",
-                        how="cross",
-                    ).select(pl.col("traffic") * pl.col("total_traffic").alias("pdf")),
-                }
+                    }
+                )
+                .with_columns(
+                    {
+                        "lane_traffic": lane_traffic.select(
+                            pl.col("traffic").alias("lane_traffic")
+                        )
+                    }
+                )
+                .with_columns(
+                    {
+                        "pdf": (
+                            pl.col("lane_traffic") * pl.col("current_traffic")
+                        ).alias("pdf")
+                    }
+                )
+                .lazy()
+            )
+
+            yield grid_points.select(
+                pl.col("x"), pl.col("y"), pl.col("pdf").fill_null(0)
             ).lazy()
 
     def total_pdf_at_time(current_time: datetime) -> pl.LazyFrame:
