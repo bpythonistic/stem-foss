@@ -19,7 +19,7 @@ from app.schemas.sqlmodels import get_session
 CONFIG_FILE_PATH = Path(__file__).parent / "testdata" / "testconfig.yaml"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def engine():
     """
     Fixture for creating a test database engine.
@@ -34,7 +34,7 @@ def engine():
     )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def create_db_and_tables(engine):
     """
     Fixture for creating the test database and tables.
@@ -44,7 +44,7 @@ def create_db_and_tables(engine):
     SQLModel.metadata.create_all(engine)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def session(engine, create_db_and_tables) -> Generator[Session, None, None]:
     """
     Fixture for creating a test database session.
@@ -74,7 +74,7 @@ def config() -> dict:
     return data
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def client(session: Session) -> Generator[TestClient, None, None]:
     """
     Fixture for creating a test client for the FastAPI application.

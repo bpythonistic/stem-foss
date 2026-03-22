@@ -101,9 +101,6 @@ def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFr
             "y": npr.uniform(
                 margin, target_map.map_size - margin, target_map.num_heat_points
             ),  # Random y positions within the map width
-            "visit_duration": np.clip(
-                npr.normal(180, 30, target_map.num_heat_points), 30, 360
-            ),  # Random visit durations with a normal distribution
         }
     )
 
@@ -144,14 +141,14 @@ def describe_lanes(
     max_stddev = (
         stddev_factor * (target_specs.top_speed * target_specs.accel_max) ** 0.5
     )
-
+    x = heat_points.select(pl.col("x")).to_series()
+    y = heat_points.select(pl.col("y")).to_series()
     return pl.DataFrame(
         {
-            "lane_id": pl.arange(0, target_map.num_heat_points),
-            "x_start": heat_points["x"],
-            "y_start": heat_points["y"],
-            "x_end": heat_points["x"].shift(-1).fill_null(heat_points["x"].first()),
-            "y_end": heat_points["y"].shift(-1).fill_null(heat_points["y"].first()),
+            "x_start": x,
+            "y_start": y,
+            "x_end": x.shift(-1).fill_null(x.first()),
+            "y_end": y.shift(-1).fill_null(y.first()),
             "traffic_density": npr.uniform(0, 1, target_map.num_heat_points)
             * (total_targets / target_map.num_heat_points),  # Random traffic density
             "traffic_stddev": npr.uniform(
@@ -177,14 +174,13 @@ def map_lane_traffic(
     """
     x_values = pl.Series(
         "x_values",
-        pl.linear_space(0, target_map.map_size, target_map.samples),
+        np.linspace(0, target_map.map_size, target_map.samples),
     )
     y_values = pl.Series(
         "y_values",
-        pl.linear_space(0, target_map.map_size, target_map.samples),
+        np.linspace(0, target_map.map_size, target_map.samples),
     )
 
-    lane_indices = pl.Series("lane_idx", pl.arange(0, target_map.num_heat_points))
     q1 = (
         pl.DataFrame({"x": x_values})
         .select(pl.col("x").alias("x"))
@@ -192,40 +188,43 @@ def map_lane_traffic(
         .select(pl.col("x"), pl.col("y").alias("y"))
         .lazy()
     )
-    for i in lane_indices:
-        q2 = q1.with_columns(
-            {
-                "dist_to_lane": pl.Series(
-                    "dist_to_lane",
-                    pl.col("x") * (lanes.item(i, "y_end") - lanes.item(i, "y_start"))
-                    - pl.col("y") * (lanes.item(i, "x_end") - lanes.item(i, "x_start"))
-                    + lanes.item(i, "y_start") * lanes.item(i, "x_end")
-                    - lanes.item(i, "y_end") * lanes.item(i, "x_start"),
-                ).abs()
-                / (
-                    (lanes.item(i, "x_end") - lanes.item(i, "x_start")) ** 2
-                    + (lanes.item(i, "y_end") - lanes.item(i, "y_start")) ** 2
-                )
-                ** 0.5
-            }
-        ).lazy()
-        q3 = q2.with_columns(
-            {
-                "traffic": lanes.item(i, "traffic_density")
-                * np.exp(
-                    -0.5
-                    * (
-                        pl.col("dist_to_lane") ** 2
-                        / lanes.item(i, "traffic_stddev") ** 2
+    for lane in lanes.iter_rows(named=True):
+        q2 = (
+            q1.with_columns(
+                (
+                    abs(
+                        pl.col("x") * (lane["y_end"] - lane["y_start"])
+                        - pl.col("y") * (lane["x_end"] - lane["x_start"])
+                        + lane["y_start"] * lane["x_end"]
+                        - lane["y_end"] * lane["x_start"],
                     )
-                )
-            }
-        ).lazy()
+                    / (
+                        (lane["x_end"] - lane["x_start"]) ** 2
+                        + (lane["y_end"] - lane["y_start"]) ** 2
+                    )
+                    ** 0.5
+                ).alias("dist_to_lane")
+            )
+            .select(pl.col("x"), pl.col("y"), pl.col("dist_to_lane"))
+            .lazy()
+        )
+        q3 = (
+            q2.with_columns(
+                (
+                    lane["traffic_density"]
+                    * np.exp(
+                        -0.5
+                        * (pl.col("dist_to_lane") ** 2 / lane["traffic_stddev"] ** 2)
+                    )
+                ).alias("traffic")
+            )
+            .select(pl.col("x"), pl.col("y"), pl.col("traffic"))
+            .lazy()
+        )
         yield q3, q1
 
 
 def calculate_temporal_lane_traffic(
-    target_map: Map,
     lanes: pl.DataFrame,
     start_time: datetime,
     duration: timedelta,
@@ -235,7 +234,6 @@ def calculate_temporal_lane_traffic(
     Calculate the temporal lane traffic based on the traffic density and variability.
 
     Args:
-        target_map (Map): The map on which the lanes are located.
         lanes (pl.DataFrame): The DataFrame containing the
             description of the lanes.
         start_time (datetime): The start time for the
@@ -248,39 +246,39 @@ def calculate_temporal_lane_traffic(
         Generator: A generator that yields LazyFrames
             containing the temporal traffic patterns for each lane.
     """
-    lane_indices = pl.Series("lane_idx", pl.arange(0, target_map.num_heat_points))
     time_series = pl.Series(
         "time",
-        pl.linear_space(start_time, start_time + duration, time_steps),
+        pl.linear_space(start_time, start_time + duration, time_steps, eager=True),
     )
-    for i in lane_indices:
-        rush_hours = npr.randint(1, 4)  # Random number of rush hours
-        rush_hour_df = pl.DataFrame(
-            {
-                "rush_hour_times": time_series.sample(
-                    rush_hours, with_replacement=False
-                ).alias("rush_hour_times"),
-            }
+    num_rush_hours = npr.randint(1, 4, size=lanes.shape[0])
+    for i, lane in enumerate(lanes.iter_rows(named=True)):
+        rush_hours = pl.Series(
+            time_series.sample(num_rush_hours[i], with_replacement=False),
         )
         traffic_patterns = [
             pl.DataFrame(
                 {
                     "time": time_series,
                     "traffic": (
-                        lanes.item(i, "traffic_density")
-                        + lanes.item(i, "traffic_density")
+                        lane["traffic_density"]
+                        + lane["traffic_density"]
                         * (npr.rand() + 1)
                         * 5
                         * np.exp(
                             -0.5
-                            * (rush_hour_df.item(j, "rush_hour_times") - time_series)
+                            * (
+                                rush_hour
+                                - time_series.map_elements(
+                                    lambda x: (x - start_time).total_seconds()
+                                )
+                            )
                             ** 2
                             / (60 * 60) ** 2
                         )
                     ),
                 }
             ).lazy()
-            for j in range(rush_hours)
+            for rush_hour in rush_hours
         ]
         yield (
             pl.concat(traffic_patterns)
@@ -330,40 +328,24 @@ def evaluate_total_pdf(
         """
         for (lane_traffic, grid_points), temporal_traffic in zip(
             map_lane_traffic(target_map, lanes),
-            calculate_temporal_lane_traffic(
-                target_map, lanes, start_time, duration, time_steps
-            ),
+            calculate_temporal_lane_traffic(lanes, start_time, duration, time_steps),
         ):
+            current_traffic = (
+                temporal_traffic.filter(pl.col("time") > current_time)
+                .select(pl.col("total_traffic").first())
+                .collect()
+                .item(0, 0)
+            )
             yield (
-                grid_points.with_columns(
-                    {
-                        "current_traffic": temporal_traffic.filter(
-                            pl.col("total_traffic") > current_time
-                        ).select(
-                            pl.col("total_traffic").first().alias("current_traffic")
-                        ),
-                    }
+                lane_traffic.select(
+                    pl.col("x"),
+                    pl.col("y"),
+                    pl.col("traffic").alias("lane_traffic"),
                 )
-                .with_columns(
-                    {
-                        "lane_traffic": lane_traffic.select(
-                            pl.col("traffic").alias("lane_traffic")
-                        )
-                    }
-                )
-                .with_columns(
-                    {
-                        "pdf": (
-                            pl.col("lane_traffic") * pl.col("current_traffic")
-                        ).alias("pdf")
-                    }
-                )
+                .with_columns(pdf=(pl.col("lane_traffic") * current_traffic))
+                .select(pl.col("x"), pl.col("y"), pl.col("pdf").fill_null(0))
                 .lazy()
             )
-
-            yield grid_points.select(
-                pl.col("x"), pl.col("y"), pl.col("pdf").fill_null(0)
-            ).lazy()
 
     def total_pdf_at_time(current_time: datetime) -> pl.LazyFrame:
         """

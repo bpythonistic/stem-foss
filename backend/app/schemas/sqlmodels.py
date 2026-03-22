@@ -173,7 +173,7 @@ class Stats(SQLModel, table=True):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    user_id: str = Field(..., foreign_key="user.id")
+    user_id: str = Field(...)
     stat_type: Stat = Field(...)
     stat_min: float = Field(default=0, ge=0)
     stat_max: float = Field(..., gt=1)
@@ -195,7 +195,7 @@ class Upgrade(SQLModel, table=True):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    user_id: str = Field(..., foreign_key="user.id")
+    user_id: str = Field(...)
     name: str = Field(...)
     description: str = Field(...)
     cost: int = Field(..., ge=0)
@@ -238,7 +238,7 @@ class Target(SQLModel, table=True):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    user_id: str = Field(..., foreign_key="user.id")
+    user_id: str = Field(...)
     name: str = Field(...)
     description: str = Field(...)
     category: TargetClass = Field(...)
@@ -277,7 +277,7 @@ class Map(SQLModel, table=True):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
-    user_id: str = Field(..., foreign_key="user.id")
+    user_id: str = Field(...)
     name: str = Field(...)
     description: str = Field(...)
     map_size: float = Field(..., gt=0)
