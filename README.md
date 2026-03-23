@@ -209,7 +209,7 @@ pixi run create-db
 
 ```bash
 # Run backend unit tests (pytest)
-pixi run -e test backend-tests
+pixi run -e test-py314 backend-tests
 ```
 
 ## 🤝 Contributing
