@@ -14,5 +14,8 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.9.4
         with:
           environments: ${{ matrix.environment }}
-      - run: pixi run -e ${{ matrix.environment }} backend-tests
+      - name: Ruff Linter
+        run: pixi run -e ${{ matrix.environment }} "ruff check backend/"
+      - name: Run pytest
+        run: pixi run -e ${{ matrix.environment }} backend-tests
       
