@@ -1,7 +1,8 @@
 """
 Tests for target mechanics.
 
-
+functions tested:
+- evaluate_total_pdf
 """
 
 from datetime import datetime, timedelta
@@ -46,7 +47,9 @@ class Targets(TargetSpecsData):
         sql_schemas.TargetClass.MEDIUM,
         sql_schemas.TargetClass.LARGE,
     ]
-    number_of_targets: dict[sql_schemas.TargetClass, int] = Field(default_factory=dict)
+    number_of_targets: dict[sql_schemas.TargetClass, int] = Field(
+        default_factory=dict
+    )
 
 
 class MapData(BaseModel):
@@ -88,7 +91,9 @@ def database_setup_fixture(
     data: DataModel = request.param
     map_in, targets_in = data.target_map, data.target_data
 
-    def create_map_and_targets() -> tuple[sql_schemas.Map, list[sql_schemas.Target]]:
+    def create_map_and_targets() -> tuple[
+        sql_schemas.Map, list[sql_schemas.Target]
+    ]:
         """
         Create the map and targets in the database for testing.
 
@@ -165,7 +170,7 @@ def database_setup_fixture(
             ),
             (200, 200),
             timedelta(hours=12),
-            timedelta(hours=5),
+            timedelta(hours=15),
             20,
         ),
     ],
@@ -204,10 +209,15 @@ def test_evaluate_total_pdf(
     start_time = datetime.now() - timedelta(hours=24)
 
     total_pdf_funcs = [
-        tm.evaluate_total_pdf(target_map, lanes, start_time, time_window, time_steps)
+        tm.evaluate_total_pdf(
+            target_map, lanes, start_time, time_window, time_steps
+        )
         for lanes in target_lanes
     ]
 
     for total_pdf_func in total_pdf_funcs:
         pdf = total_pdf_func(start_time + rel_start_time)
-        assert pdf.collect().shape[0] == expected_pdf_dims[0] * expected_pdf_dims[1]
+        assert (
+            pdf.collect().shape[0]
+            == expected_pdf_dims[0] * expected_pdf_dims[1]
+        )

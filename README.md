@@ -205,6 +205,13 @@ Ensure PostgreSQL is not already globally installed and running before proceedin
 pixi run create-db
 ```
 
+### Backend Unit Tests
+
+```bash
+# Run backend unit tests (pytest)
+pixi run -e test backend-tests
+```
+
 ## 🤝 Contributing
 
 1. Fork the project
