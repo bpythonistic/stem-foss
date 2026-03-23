@@ -77,9 +77,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
     )
 
 
-def generate_map_heat_points(
-    target_map: Map, margin: float = 5.00
-) -> pl.DataFrame:
+def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFrame:
     """
     Generate random heat points for the map.
 
@@ -152,9 +150,7 @@ def describe_lanes(
             "x_end": x.shift(-1).fill_null(x.first()),
             "y_end": y.shift(-1).fill_null(y.first()),
             "traffic_density": npr.uniform(0, 1, target_map.num_heat_points)
-            * (
-                total_targets / target_map.num_heat_points
-            ),  # Random traffic density
+            * (total_targets / target_map.num_heat_points),  # Random traffic density
             "traffic_stddev": npr.uniform(
                 0.1 * max_stddev, max_stddev, target_map.num_heat_points
             ),  # Random traffic variability
@@ -218,10 +214,7 @@ def map_lane_traffic(
                     lane["traffic_density"]
                     * np.exp(
                         -0.5
-                        * (
-                            pl.col("dist_to_lane") ** 2
-                            / lane["traffic_stddev"] ** 2
-                        )
+                        * (pl.col("dist_to_lane") ** 2 / lane["traffic_stddev"] ** 2)
                     )
                 ).alias("traffic")
             )
@@ -255,9 +248,7 @@ def calculate_temporal_lane_traffic(
     """
     time_series = pl.Series(
         "time",
-        pl.linear_space(
-            start_time, start_time + duration, time_steps, eager=True
-        ),
+        pl.linear_space(start_time, start_time + duration, time_steps, eager=True),
     )
     num_rush_hours = npr.randint(1, 4, size=lanes.shape[0])
     for i, lane in enumerate(lanes.iter_rows(named=True)):
@@ -337,9 +328,7 @@ def evaluate_total_pdf(
         """
         for (lane_traffic, _), temporal_traffic in zip(
             map_lane_traffic(target_map, lanes),
-            calculate_temporal_lane_traffic(
-                lanes, start_time, duration, time_steps
-            ),
+            calculate_temporal_lane_traffic(lanes, start_time, duration, time_steps),
         ):
             current_traffic = (
                 temporal_traffic.select(
