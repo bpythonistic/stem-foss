@@ -253,6 +253,41 @@ class Target(SQLModel, table=True):
     loot_stddev: float | None = Field(default=None, ge=0)
 
 
+class Map(SQLModel, table=True):
+    """
+    Represents a map in the system.
+
+    Attributes:
+        id (str): Unique identifier for the map entry, generated using UUID4.
+        user_id (str): The ID of the user to whom this map belongs.
+        name (str): The name of the map.
+        description (str): A brief description of the map.
+        map_size (float): The size of the map, with a constraint to ensure it's
+            greater than 0.
+        samples (int): The number of samples for each dimension of the map, with a constraint to ensure it's
+            greater than 0.
+        num_small_targets (int): The number of small targets on the map, with a constraint
+            to ensure it's greater than 0.
+        num_medium_targets (int): The number of medium targets on the map, with a constraint
+            to ensure it's greater than 0.
+        num_large_targets (int): The number of large targets on the map, with a constraint
+            to ensure it's greater than 0.
+        num_heat_points (int): The number of heat points on the map, with a
+            constraint to ensure it's greater than 0.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    user_id: str = Field(...)
+    name: str = Field(...)
+    description: str = Field(...)
+    map_size: float = Field(..., gt=0)
+    samples: int = Field(..., gt=0)
+    num_small_targets: int = Field(..., gt=0)
+    num_medium_targets: int = Field(..., gt=0)
+    num_large_targets: int = Field(..., gt=0)
+    num_heat_points: int = Field(..., gt=0)
+
+
 def get_session() -> Generator[Session, None, None]:
     """
     Provides a database session for executing queries.

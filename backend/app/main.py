@@ -26,8 +26,8 @@ FRONTEND_ORIGINS = [
 ]
 
 app = FastAPI(
-    title="Sniper Game API",
-    description="API for the Sniper Game backend",
+    title="Project Netfall Backend API",
+    description="API for the Project Netfall backend",
     version="0.1.0",
 )
 

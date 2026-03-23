@@ -5,8 +5,3 @@ It includes tests for:
 - API endpoints
 - User authentication and management
 """
-
-import pytest
-from fastapi import status
-from fastapi.testclient import TestClient
-from pydantic import BaseModel
