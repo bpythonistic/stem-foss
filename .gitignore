@@ -3,6 +3,7 @@ dist/
 **/*/__pycache__/
 .env
 .vscode
+*.parquet
 postgresql/
 .coverage
 *.db# pixi environments

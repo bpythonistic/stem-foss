@@ -6,14 +6,14 @@ loot distribution, and other related mechanics.
 """
 
 # import os
-from typing import Generator, Callable
 from datetime import datetime, timedelta
+from typing import Callable, Generator
 
-import numpy.random as npr
 import numpy as np
+import numpy.random as npr
 import polars as pl
 
-from app.schemas.sqlmodels import Target, TargetClass, LootDist, Map
+from app.schemas.sqlmodels import LootDist, Map, Target, TargetClass
 
 npr.seed(42)  # Set a fixed seed for reproducibility
 
@@ -77,7 +77,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
     )
 
 
-def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFrame:
+def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.LazyFrame:
     """
     Generate random heat points for the map.
 
@@ -89,17 +89,27 @@ def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFr
         margin (float): The margin to avoid placing heat
             points too close to the edges of the map.
     Returns:
-        pl.DataFrame: A DataFrame containing the
+        pl.LazyFrame: A LazyFrame containing the
             generated heat points with
             their positions and visit durations.
     """
-    return pl.DataFrame(
+    return pl.LazyFrame(
         {
-            "x": npr.uniform(
-                margin, target_map.map_size - margin, target_map.num_heat_points
-            ),  # Random x positions within the map width
-            "y": npr.uniform(
-                margin, target_map.map_size - margin, target_map.num_heat_points
+            "x": pl.Series(
+                "x",
+                npr.uniform(
+                    margin,
+                    target_map.map_size - margin,
+                    target_map.num_heat_points,
+                ),
+            ),
+            "y": pl.Series(
+                "y",
+                npr.uniform(
+                    margin,
+                    target_map.map_size - margin,
+                    target_map.num_heat_points,
+                ),
             ),  # Random y positions within the map width
         }
     )
@@ -107,16 +117,16 @@ def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFr
 
 def describe_lanes(
     target_map: Map,
-    heat_points: pl.DataFrame,
+    heat_points: pl.LazyFrame,
     target_specs: Target,
     stddev_factor: float = 0.2,
-) -> pl.DataFrame:
+) -> pl.LazyFrame:
     """
     Describe the lanes on the map based on the heat points.
 
     Args:
         target_map (Map): The map on which the lanes are located.
-        heat_points (pl.DataFrame): The heat points on the map.
+        heat_points (pl.LazyFrame): The heat points on the map.
         target_specs (Target): The specifications for the targets
             for which to describe lanes.
         stddev_factor (float): A factor to scale the standard
@@ -126,7 +136,7 @@ def describe_lanes(
             speed and acceleration.
 
     Returns:
-        pl.DataFrame: A DataFrame containing the description of the lanes.
+        pl.LazyFrame: A LazyFrame containing the description of the lanes.
     """
 
     match target_specs.category:
@@ -141,35 +151,31 @@ def describe_lanes(
     max_stddev = (
         stddev_factor * (target_specs.top_speed * target_specs.accel_max) ** 0.5
     )
-    x = heat_points.select(pl.col("x")).to_series()
-    y = heat_points.select(pl.col("y")).to_series()
-    return pl.DataFrame(
-        {
-            "x_start": x,
-            "y_start": y,
-            "x_end": x.shift(-1).fill_null(x.first()),
-            "y_end": y.shift(-1).fill_null(y.first()),
-            "traffic_density": npr.uniform(0, 1, target_map.num_heat_points)
-            * (total_targets / target_map.num_heat_points),  # Random traffic density
-            "traffic_stddev": npr.uniform(
-                0.1 * max_stddev, max_stddev, target_map.num_heat_points
-            ),  # Random traffic variability
-        }
+    return heat_points.with_columns(
+        x_start=pl.col("x"),
+        y_start=pl.col("y"),
+        x_end=pl.col("x").shift(-1).fill_null(pl.col("x").first()),
+        y_end=pl.col("y").shift(-1).fill_null(pl.col("y").first()),
+        traffic_density=pl.lit(npr.uniform(0, 1, target_map.num_heat_points))
+        * (total_targets / target_map.num_heat_points),  # Random traffic density
+        traffic_stddev=pl.lit(
+            npr.uniform(0.1 * max_stddev, max_stddev, target_map.num_heat_points)
+        ),  # Random traffic variability
     )
 
 
 def map_lane_traffic(
-    target_map: Map, lanes: pl.DataFrame
+    target_map: Map, lanes: pl.LazyFrame
 ) -> Generator[tuple[pl.LazyFrame, pl.LazyFrame], None, None]:
     """
     Map the traffic on the lanes based on the traffic density and variability.
 
     Args:
         target_map (Map): The map on which the lanes are located.
-        lanes (pl.DataFrame): The DataFrame containing the description of the lanes.
+        lanes (pl.LazyFrame): The LazyFrame containing the description of the lanes.
 
     Returns:
-        Generator: A generator that yields DataFrames
+        Generator: A generator that yields LazyFrames
             containing the traffic mapped on the lanes and the grid points.
     """
     x_values = pl.Series(
@@ -188,7 +194,7 @@ def map_lane_traffic(
         .select(pl.col("x"), pl.col("y").alias("y"))
         .lazy()
     )
-    for lane in lanes.iter_rows(named=True):
+    for lane in lanes.collect().iter_rows(named=True):
         q2 = (
             q1.with_columns(
                 (
@@ -225,7 +231,7 @@ def map_lane_traffic(
 
 
 def calculate_temporal_lane_traffic(
-    lanes: pl.DataFrame,
+    lanes: pl.LazyFrame,
     start_time: datetime,
     duration: timedelta,
     time_steps: int,
@@ -234,7 +240,7 @@ def calculate_temporal_lane_traffic(
     Calculate the temporal lane traffic based on the traffic density and variability.
 
     Args:
-        lanes (pl.DataFrame): The DataFrame containing the
+        lanes (pl.LazyFrame): The LazyFrame containing the
             description of the lanes.
         start_time (datetime): The start time for the
             temporal traffic evaluation.
@@ -250,8 +256,8 @@ def calculate_temporal_lane_traffic(
         "time",
         pl.linear_space(start_time, start_time + duration, time_steps, eager=True),
     )
-    num_rush_hours = npr.randint(1, 4, size=lanes.shape[0])
-    for i, lane in enumerate(lanes.iter_rows(named=True)):
+    num_rush_hours = npr.randint(1, 4, size=lanes.collect().shape[0])
+    for i, lane in enumerate(lanes.collect().iter_rows(named=True)):
         rush_hours = pl.Series(
             time_series.sample(num_rush_hours[i], with_replacement=False),
         )
@@ -289,7 +295,7 @@ def calculate_temporal_lane_traffic(
 
 def evaluate_total_pdf(
     target_map: Map,
-    lanes: pl.DataFrame,
+    lanes: pl.LazyFrame,
     start_time: datetime,
     duration: timedelta,
     time_steps: int,
@@ -299,7 +305,7 @@ def evaluate_total_pdf(
 
     Args:
         target_map (Map): The map on which the lanes are located.
-        lanes (pl.DataFrame): The DataFrame containing the
+        lanes (pl.LazyFrame): The LazyFrame containing the
             description of the lanes.
         start_time (datetime): The start time for the
             temporal traffic evaluation.
