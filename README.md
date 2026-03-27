@@ -41,7 +41,7 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 
 #### Phase I: The Core Physics & UI Loop
 
-- [ ] **Backend Math Engine**: Implement the spatial parametric curves and temporal modulation in Python/Polars to generate dynamic PDFs.
+- [x] **Backend Math Engine**: Implement the spatial parametric curves and temporal modulation in Python/Polars to generate dynamic PDFs.
 
 - [ ] **Frontend Map Integration**: Render the Leaflet 2D map and overlay the downsampled PDF heatmap.
 

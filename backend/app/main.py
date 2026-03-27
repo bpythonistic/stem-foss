@@ -1,15 +1,17 @@
 """
-This module defines the main FastAPI application and database connection utilities.
+Defines the FastAPI application and REST API endpoints.
 
-It includes:
-- A FastAPI application instance.
-- API Endpoints
+- read_root: Health check endpoint.
+- create_user: Registers a new user.
+- get_user: Retrieves a user profile.
+- create_map: Registers a new map.
+- create_targets: Registers targets and triggers generation.
+- configure_pdf_parameters: Sets global simulation parameters.
 """
 
 import os
 from datetime import datetime, timedelta
 
-# from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
@@ -50,10 +52,11 @@ app.include_router(target_pdf_router)
 @app.get("/")
 def read_root():
     """
-    Root endpoint to verify that the API is running.
+    Verifies that the backend API is online and responding.
 
     Returns:
-        dict: A simple message indicating that the API is operational.
+        dict: A health check success
+            message payload.
     """
     return {"message": "Welcome to the Project Netfall Backend API!"}
 
@@ -61,14 +64,16 @@ def read_root():
 @app.post("/users/")
 def create_user(user: User, session: SessionDep) -> User:
     """
-    Create a new user in the database.
+    Registers a new player profile into the Postgres database.
 
     Args:
-        user (User): The user object containing the details of the user to create.
-        session (SessionDep): The database session dependency.
-
+        user (User): The desired profile
+            schema to be registered.
+        session (SessionDep): The injected
+            database session.
     Returns:
-        User: The created user object with an assigned ID.
+        User: The confirmed profile
+            with a generated UUID.
     """
     existing_user = session.exec(select(User).where(User.name == user.name)).first()
     if existing_user:
@@ -82,17 +87,16 @@ def create_user(user: User, session: SessionDep) -> User:
 @app.get("/users/{user_name}")
 def get_user(user_name: str, session: SessionDep) -> User:
     """
-    Retrieve a user by their name.
+    Retrieves an existing player profile from the database.
 
     Args:
-        user_name (str): The name of the user to retrieve.
-        session (SessionDep): The database session dependency.
-
+        user_name (str): The exact display
+            name of the profile.
+        session (SessionDep): The injected
+            database session.
     Returns:
-        User: The user object if found.
-
-    Raises:
-        HTTPException: If the user is not found in the database.
+        User: The requested profile
+            data from the database.
     """
     statement = select(User).where(User.name == user_name)
     result = session.exec(statement).first()
@@ -104,15 +108,18 @@ def get_user(user_name: str, session: SessionDep) -> User:
 @app.post("/maps/")
 def create_map(target_map: Map, target_id: str, session: SessionDep) -> Map:
     """
-    Create a new map in the database.
+    Initializes and registers a new tactical map environment.
 
     Args:
-        target_map (Map): The map object containing the details of the map to create.
-        target_id (str): The ID of the target associated with the map.
-        session (SessionDep): The database session dependency.
-
+        target_map (Map): The map schema
+            to register and save.
+        target_id (str): The target UUID
+            linked to this map.
+        session (SessionDep): The injected
+            database session.
     Returns:
-        Map: The created map object with an assigned ID.
+        Map: The confirmed map schema
+            with a generated UUID.
     """
 
     session.add(target_map)
@@ -126,18 +133,18 @@ def create_map(target_map: Map, target_id: str, session: SessionDep) -> Map:
 @app.post("/targets/{map_id}")
 def create_targets(target: Target, map_id: str, session: SessionDep) -> Target:
     """
-    Create a new target in the database.
-        This endpoint is designed to be called after a map has been created,
-        and it will save the target specifications to the application
-        state for use in PDF calculations.
+    Registers an enemy drone and triggers lane caching.
 
     Args:
-        target (Target): The target object containing the details of the target to create.
-        map_id (str): The ID of the map associated with the target.
-        session (SessionDep): The database session dependency.
-
+        target (Target): The target schema
+            to register and save.
+        map_id (str): The map UUID linked
+            to this enemy drone.
+        session (SessionDep): The injected
+            database session.
     Returns:
-        Target: The created target object with an assigned ID.
+        Target: The confirmed target
+            with a generated UUID.
     """
 
     session.add(target)
@@ -164,15 +171,20 @@ def configure_pdf_parameters(
     downsample_step: int = 4,
 ) -> dict:
     """
-    Endpoint to configure PDF parameters.
+    Sets the global timing configuration for the simulation.
 
     Args:
-        start_time (datetime): The starting time for the PDF evaluation.
-        duration (timedelta): The total duration for which to evaluate the PDF.
-        time_steps (int): The number of time steps to consider in the evaluation.
-        downsample_step (int): The step size for downsampling the PDF grid.
+        start_time (datetime): The absolute
+            start of the simulation.
+        duration (timedelta): The total
+            simulated cycle duration.
+        time_steps (int): The resolution
+            of the time simulation.
+        downsample_step (int): The scaling
+            factor for matrix size.
     Returns:
-        dict: A message confirming that the PDF parameters have been configured.
+        dict: A success message payload
+            confirming configuration.
     """
 
     app.state.start_time = start_time

@@ -1,8 +1,9 @@
 """
-This module contains helper functions for handling PDF files related to target data.
-    It includes functions for extracting text from PDFs, converting PDFs to images,
-    and other utilities that assist in processing PDF files for the application.
+Provides helper functions for formatting and caching PDFs.
 
+- save_map_state: Caches the lane configurations to Parquet.
+- get_echarts_payload: Formats PDF matrices for frontend UI.
+- tactical_map_stream: WebSocket endpoint for UI streaming.
 """
 
 import asyncio
@@ -26,20 +27,16 @@ router = APIRouter()
 
 def save_map_state(target_map: TargetMap, target_specs: Target) -> None:
     """
-    Evaluates the current state of the target map
-        and saves the lane descriptions to a Parquet file.
+    Caches the static map routes to a file for rapid loading.
 
     Args:
-    - target_map (TargetMap): The target map containing the
-        current state of the map.
-    - target_specs (Target): The specifications of the target,
-        which may include parameters such as speed, size,
-        and other relevant attributes.
+        target_map (TargetMap): The active
+            operational zone map.
+        target_specs (Target): The stats
+            used to calculate variance.
     Returns:
-    - None: This function does not return any value.
-        It performs its operations and saves the
-        lane descriptions to a Parquet file named
-        "current_lanes_for_{target_specs.id}.parquet".
+        None: Operations are saved directly
+            to the local disk.
     """
 
     heat_points = generate_map_heat_points(target_map)
@@ -57,19 +54,24 @@ def get_echarts_payload(
     downsample_step: int = 4,
 ) -> str:
     """
-    Evaluates the math, downsamples the grid, formats for ECharts,
-    and caches the serialized JSON string to bypass Pydantic overhead.
+    Transforms and downsamples the raw PDF into frontend JSON.
 
     Args:
-        target_map (TargetMap): The target map with its associated data.
-        target_time (datetime): The specific time at which to evaluate the PDF.
-        duration (timedelta): The total duration for which to evaluate the PDF.
-        time_steps (int): The number of time steps to consider in the evaluation.
-        downsample_step (int): The factor by which to downsample the grid.
+        target_map_str (str): The JSON
+            string of the active map.
+        target_specs_id (str): The UUID
+            for locating the lane file.
+        target_time (datetime): The exact
+            time to evaluate the PDF.
+        duration (timedelta): The total
+            cycle duration length.
+        time_steps (int): The resolution
+            of the time simulation.
+        downsample_step (int): The scaling
+            factor for matrix size.
     Returns:
-        str: A JSON string formatted for ECharts consumption,
-            containing x/y indices, PDF values,
-            and the maximum PDF value for scaling.
+        str: A serialized JSON payload
+            configured for ECharts.
     """
 
     target_map = TargetMap(**json.loads(target_map_str))
@@ -136,11 +138,14 @@ def get_echarts_payload(
 @router.websocket("/ws/tactical-map")
 async def tactical_map_stream(websocket: WebSocket):
     """
-    WebSocket endpoint for streaming tactical map PDF
-        data to the client in real-time.
-        This endpoint listens for incoming
-        messages containing the relative time (in seconds)
+    Manages the WebSocket connection for real-time map updates.
 
+    Args:
+        websocket (WebSocket): The active
+            client socket connection.
+    Returns:
+        None: Manages the async event
+            loop for the connection.
     """
     await websocket.accept()
 
@@ -155,13 +160,11 @@ async def tactical_map_stream(websocket: WebSocket):
 
     async def process_and_send():
         """
-        Background task that processes the latest state and ignores stale requests.
+        Evaluates the latest time request and streams the payload.
 
-        This function runs in an infinite loop, checking for the
-            latest requested time from the client. If a new time
-            has been requested, it evaluates the PDF for that
-            time and sends the result back to the client. If no
-            new time has been requested, it sleeps briefly to avoid busy-waiting.
+        Returns:
+            None: Runs continuously in the
+                background event loop.
         """
         nonlocal latest_requested_time
 

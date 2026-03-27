@@ -18,7 +18,7 @@ update-nodejs = "npm install --save-dev"
 compile-ts = "tsc"
 watch-ts = "tsc -w"
 build = "npm run build"
-pre-commit = "npx lint-staged && ruff check --fix && ruff format --line-length 88"
+pre-commit = "npx lint-staged && ruff check --fix && ruff format"
 
 [dependencies]
 python = ">=3.11"

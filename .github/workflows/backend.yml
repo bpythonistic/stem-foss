@@ -2,7 +2,7 @@ name: Backend
 on:
   push:
   pull_request:
-    branches: ["main"]
+    branches: ['main']
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -18,4 +18,3 @@ jobs:
         run: pixi run -e ${{ matrix.environment }} "ruff check backend/"
       - name: Run pytest
         run: pixi run -e ${{ matrix.environment }} backend-tests
-      
