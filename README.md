@@ -13,19 +13,16 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 ### 1. Deploy & Observe (Data Gathering)
 
 - **Goal**: Map the invisible sky lanes.
-
 - **Mechanic**: Players deploy limited sensor nodes across a 2D topographical map. Over time, these sensors gather discrete data points on target movements, revealing high-traffic routes based on the target's `Category` and behavior profiles.
 
 ### 2. Analyze & Predict (Reading the PDF)
 
 - **Goal**: Identify temporal "choke points."
-
 - **Mechanic**: The game translates raw sensor data into a dynamic 2D Probability Density Function (PDF) heatmap. Players scrub through a timeline to see how the probability of a drone's location shifts throughout the day. The objective is to find the exact coordinates and time where the PDF variance (σ2) is lowest, indicating a highly predictable target location.
 
 ### 3. Ambush & Capture (Kinematic Interception)
 
 - **Goal**: Execute a perfectly timed net drop.
-
 - **Mechanic**: Once an ambush point is selected, players position their UAV. When the target approaches, players must factor in target speed (`Top_Speed`), altitude, and net descent rate to calculate the exact release window. A successful capture occurs when the target intersects the net's hit radius at the time of impact.
 
 ### 4. Extract & Upgrade (RPG Progression)
@@ -34,7 +31,6 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 
 - **Mechanic**: Captured targets yield rewards based on statistical distributions (`Loot_Mean`, `Loot_StdDev`). Players use this loot to invest in their loadout:
   - **Classes & Traits**: Select operator backgrounds that offer baseline multipliers to sensor range or net aerodynamics.
-
   - **Stats & Upgrades**: Purchase better hardware to modify base stats, such as increasing sensor sampling rates, buying heavier nets that fall faster (reducing lead time), or upgrading UAV batteries for longer loiter times.
 
 ### Development Roadmap
@@ -42,21 +38,16 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 #### Phase I: The Core Physics & UI Loop
 
 - [x] **Backend Math Engine**: Implement the spatial parametric curves and temporal modulation in Python/Polars to generate dynamic PDFs.
-
-- [ ] **Frontend Map Integration**: Render the Leaflet 2D map and overlay the downsampled PDF heatmap.
-
+- [ ] **Data Streaming API**: Create a FastAPI WebSocket endpoint to evaluate the total PDF on-demand, downsample the matrix, and stream JSON payloads to the client.
+- [ ] **Frontend Canvas Integration**: Configure an Apache ECharts canvas to render the incoming downsampled PDF matrix as a high-performance heatmap.
 - [ ] **Time-Scrubbing UI**: Build the interactive timeline slider in React to allow users to observe PDF shifts over a 24-hour simulation cycle.
-
 - [ ] **Basic Interception Logic**: Create the FastAPI endpoint to validate a "Drop Net" event based on target coordinates, net radius, and time of impact.
 
 #### Phase II: RPG Mechanics & Persistence
 
 - [ ] **Database Initialization**: Spin up PostgreSQL with SQLModel for the Users, Stats, and Targets schemas.
-
 - [ ] **Loot Distribution System**: Implement the NumPy/SciPy logic to generate randomized loot drops based on the target's specific Gaussian distribution parameters.
-
 - [ ] **Loadout Management**: Build the frontend UI forms for players to view their Traits, spend loot on Upgrades, and see how it modifies their base interception stats.
-
 - [ ] **Target Tiering**: Introduce Small, Medium, and Large target classes with varying speed and acceleration profiles, requiring different predictive strategies.
 
 ---
@@ -69,75 +60,28 @@ To learn Probability Density Functions (PDFs) through analysis of randomized dro
 
 ### Initial Backend API
 
-1. Simulate semi-random drone behavior in NumPy/SciPy.
-2. Calculate the PDF trend over time.
-3. Generate a visualization of the PDF using Seaborn.
-4. Convert Seaborn plot to HTML with mpld3 to send to the frontend.
+1. Simulate semi-random drone behavior using parametric curves and amplitude modulation.
+2. Evaluate the combined spatiotemporal PDF across the coordinate grid.
+3. Downsample the resulting matrix and format it as a lightweight JSON payload.
+4. Stream the data to the frontend via a WebSocket connection.
 5. Interact with the PostgreSQL database to save/fetch the user's traits, stats, upgrades, etc.
-6. Provide API endpoints to the frontend.
+6. Provide standard REST API endpoints for user and game state management.
 
 ### Frontend Prototype
 
-1. Generate or load a 2D Leaflet map.
-2. Overlay map with the PDFs obtained from the backend API.
+1. Establish a WebSocket connection to the backend to request and receive PDF frames.
+2. Render the dynamic PDF data natively using an Apache ECharts canvas.
 3. Display the user's traits, stats, upgrades, etc. retrieved from the backend.
 
 ### UI/UX Prototype Design
 
-1. Render the 2D map with a PDF overlay that can be enabled/disabled via a checkbox.
+1. Render the ECharts canvas with an interactive timeline slider to scrub through the temporal PDF data seamlessly.
 2. Provide a UI form for user setup.
 3. Design the UI for displaying and interacting with user traits, stats, upgrades, etc.
 
 ### Database Schema
 
-- Users table
-  - Id
-  - Name
-  - Class_Name
-- Classes table
-  - Id
-  - Name
-  - Description
-  - Trait_1
-  - Trait_2
-  - Trait_3
-- Traits table
-  - Id
-  - Name
-  - Description
-  - Category
-  - Modifies
-  - Multiplier
-  - Offset
-- Stats table
-  - Id
-  - User_Id
-  - Stat_Type
-  - Stat_Min
-  - Stat_Max
-  - Base_Value
-  - Current_Value
-- Upgrades table
-  - Id
-  - Name
-  - Cost
-  - Effected_Stat
-  - Stat_Multiplier
-  - Stat_Offset
-- Targets table
-  - Id
-  - Category
-  - Top_Speed
-  - Accel_Max
-  - Decel_Max
-  - Hit_Box
-  - Loot_Dist
-  - Loot_Min
-  - Loot_Max
-  - Loot_Mean
-  - Loot_StdDev
-
-### Other Requirements
+See [sqlmodels.py](backend/app/schemas/sqlmodels.py) for up-to-date schemas.
 
 ## 🛠 Tech Stack
 
@@ -158,7 +102,7 @@ To learn Probability Density Functions (PDFs) through analysis of randomized dro
 - **Language:** `TypeScript 5`
 - **Framework:** `React`
 - **Build Tool:** `Vite`
-- **Visualization:** `Apache ECharts` (for rendering streamed target traffic heatmaps to overlay over a generated 2D game map)
+- **Visualization:** `Apache ECharts` (for rendering the 2D Cartesian tactical grid and streaming dynamic PDF heatmaps)
 - **State Management:** React Hooks / Context API
 - **Unit tests:** `jest`
 
@@ -238,4 +182,4 @@ pixi run -e test-py314 backend-tests
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
