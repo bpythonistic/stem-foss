@@ -26,7 +26,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install fastapi pyyaml numpy sqlmodel psycopg pre-commit uvicorn pandas
+        python -m pip install fastapi pyyaml numpy sqlmodel psycopg pre-commit uvicorn polars
         python -m pip install ruff pytest pytest-cov pysqlite3
     - name: Lint with ruff
       run: |
