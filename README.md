@@ -119,7 +119,7 @@ See [sqlmodels.py](backend/app/schemas/sqlmodels.py) for up-to-date schemas.
 
 ## 🚀 Getting Started
 
-**Note: An app prototype is planned, but nothing runs for now.**
+> **Note: An app prototype is planned, but nothing runs for now.**
 
 ### Prerequisites
 

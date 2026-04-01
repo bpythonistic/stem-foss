@@ -115,13 +115,13 @@ class User(SQLModel, table=True):
             identifying the player.
         name (str): The player's chosen
             display name or handle.
-        class_name (str): The selected RPG class
+        class_name (str | None): The selected RPG class
             defining the player's playstyle.
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     name: str = Field(..., max_length=100)
-    class_name: str = Field(..., max_length=100)
+    class_name: str | None = Field(default=None, max_length=100)
 
 
 class RPGClass(SQLModel, table=True):

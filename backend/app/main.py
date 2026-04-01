@@ -12,7 +12,7 @@ Defines the FastAPI application and REST API endpoints.
 import os
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
 
@@ -61,7 +61,7 @@ def read_root():
     return {"message": "Welcome to the Project Netfall Backend API!"}
 
 
-@app.post("/users/")
+@app.post("/users/", status_code=status.HTTP_201_CREATED)
 def create_user(user: User, session: SessionDep) -> User:
     """
     Registers a new player profile into the Postgres database.
@@ -77,7 +77,9 @@ def create_user(user: User, session: SessionDep) -> User:
     """
     existing_user = session.exec(select(User).where(User.name == user.name)).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="User already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists"
+        )
     session.add(user)
     session.commit()
     session.refresh(user)
@@ -101,20 +103,20 @@ def get_user(user_name: str, session: SessionDep) -> User:
     statement = select(User).where(User.name == user_name)
     result = session.exec(statement).first()
     if not result:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     return result
 
 
-@app.post("/maps/")
-def create_map(target_map: Map, target_id: str, session: SessionDep) -> Map:
+@app.post("/maps/", status_code=status.HTTP_201_CREATED)
+def create_map(target_map: Map, session: SessionDep) -> Map:
     """
     Initializes and registers a new tactical map environment.
 
     Args:
         target_map (Map): The map schema
             to register and save.
-        target_id (str): The target UUID
-            linked to this map.
         session (SessionDep): The injected
             database session.
     Returns:
@@ -130,7 +132,7 @@ def create_map(target_map: Map, target_id: str, session: SessionDep) -> Map:
     return target_map
 
 
-@app.post("/targets/{map_id}")
+@app.post("/targets/{map_id}", status_code=status.HTTP_201_CREATED)
 def create_targets(target: Target, map_id: str, session: SessionDep) -> Target:
     """
     Registers an enemy drone and triggers lane caching.
@@ -154,7 +156,9 @@ def create_targets(target: Target, map_id: str, session: SessionDep) -> Target:
     query = select(Map).where(Map.id == map_id)
     target_map = session.exec(query).first()
     if not target_map:
-        raise HTTPException(status_code=404, detail="Map not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Map not found"
+        )
     app.state.current_map = target_map
     app.state.current_target_specs = target
 
