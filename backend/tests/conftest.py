@@ -1,31 +1,33 @@
 """This file contains fixtures for testing the FastAPI application.
 
-It sets up a test database, creates a test client, and provides a fixture for an authenticated user.
-The fixtures ensure that each test runs in isolation with a clean database state.
+It sets up a test database, creates a test client,
+and provides a fixture for an authenticated user.
+The fixtures ensure that each test runs in isolation
+with a clean database state.
 """
 
 from pathlib import Path
 from typing import Generator
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session, create_engine, SQLModel
-from sqlalchemy.pool import StaticPool
-from yaml import safe_load
-
 from app.main import app
 from app.schemas.sqlmodels import get_session
+from fastapi.testclient import TestClient
+from sqlalchemy.pool import StaticPool
+from sqlalchemy import Engine
+from sqlmodel import Session, SQLModel, create_engine
+from yaml import safe_load
 
 CONFIG_FILE_PATH = Path(__file__).parent / "testdata" / "testconfig.yaml"
 
 
 @pytest.fixture
-def engine():
+def engine() -> Engine:
     """
     Fixture for creating a test database engine.
 
-    :return: A SQLModel engine for the test database.
-    :rtype: Engine
+    Returns:
+        Engine: A SQLAlchemy engine for the test database.
     """
     return create_engine(
         "sqlite:///:memory:",
@@ -35,24 +37,27 @@ def engine():
 
 
 @pytest.fixture
-def create_db_and_tables(engine):
+def create_db_and_tables(engine: Engine):
     """
     Fixture for creating the test database and tables.
 
-    :param engine: The test database engine.
+    Args:
+        engine (Engine): The test database engine.
     """
     SQLModel.metadata.create_all(engine)
 
 
 @pytest.fixture
-def session(engine, create_db_and_tables) -> Generator[Session, None, None]:
+def session(engine: Engine, create_db_and_tables) -> Generator[Session, None, None]:
     """
     Fixture for creating a test database session.
 
-    :param engine: The test database engine.
-    :param create_db_and_tables: The fixture for creating the test database and tables.
-    :return: A SQLModel session for the test database.
-    :rtype: Session
+    Args:
+        engine (Engine): The test database engine.
+        create_db_and_tables: The fixture for
+            creating the test database and tables.
+    Returns:
+        Session: A SQLModel session for the test database.
     """
     with Session(engine) as s:
         yield s
@@ -66,8 +71,8 @@ def config() -> dict:
     """
     Fixture for loading test data from a YAML file.
 
-    :return: A dictionary containing the test data.
-    :rtype: dict
+    Returns:
+        dict: A dictionary containing the test data.
     """
     with open(CONFIG_FILE_PATH, "r") as f:
         data = safe_load(f)["data"]
@@ -79,14 +84,20 @@ def client(session: Session) -> Generator[TestClient, None, None]:
     """
     Fixture for creating a test client for the FastAPI application.
 
-    :param session: The test database session.
-    :return: A TestClient instance for the FastAPI application.
-    :rtype: TestClient
+    Args:
+        session (Session): The test database session.
+    Returns:
+        TestClient: A TestClient instance for the FastAPI application.
     """
 
-    def get_session_override():
-        with Session(session.bind) as s:
-            yield s
+    def get_session_override() -> Session:
+        """
+        Override function for the get_session dependency.
+
+        Returns:
+            Session: The test database session.
+        """
+        return session
 
     app.dependency_overrides[get_session] = get_session_override
 

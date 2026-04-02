@@ -1,8 +1,10 @@
 node_modules/
 dist/
 **/*/__pycache__/
-.env
+.env*
+!.env.example
 .vscode
+*.parquet
 postgresql/
 .coverage
 *.db# pixi environments

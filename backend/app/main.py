@@ -1,20 +1,27 @@
 """
-This module defines the main FastAPI application and database connection utilities.
+Defines the FastAPI application and REST API endpoints.
 
-It includes:
-- A FastAPI application instance.
-- API Endpoints
+- read_root: Health check endpoint.
+- create_user: Registers a new user.
+- get_user: Retrieves a user profile.
+- create_map: Registers a new map.
+- create_targets: Registers targets and triggers generation.
+- configure_pdf_parameters: Sets global simulation parameters.
 """
 
 import os
+from datetime import datetime, timedelta
 
-# from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
 
+from app.features.target_pdf_helpers import router as target_pdf_router
+from app.features.target_pdf_helpers import save_map_state
 from app.schemas.sqlmodels import (
+    Map,
     SessionDep,
+    Target,
     User,
 )
 
@@ -39,24 +46,194 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(target_pdf_router)
+
+
+@app.get("/")
+def read_root():
+    """
+    Verifies that the backend API is online and responding.
+
+    Returns:
+        dict: A health check success
+            message payload.
+    """
+    return {"message": "Welcome to the Project Netfall Backend API!"}
+
+
+@app.post("/users/", status_code=status.HTTP_201_CREATED)
+def create_user(user: User, session: SessionDep) -> User:
+    """
+    Registers a new player profile into the Postgres database.
+
+    Args:
+        user (User): The desired profile
+            schema to be registered.
+        session (SessionDep): The injected
+            database session.
+    Returns:
+        User: The confirmed profile
+            with a generated UUID.
+    """
+    existing_user = session.exec(select(User).where(User.name == user.name)).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists"
+        )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
 
 @app.get("/users/{user_name}")
 def get_user(user_name: str, session: SessionDep) -> User:
     """
-    Retrieve a user by their name.
+    Retrieves an existing player profile from the database.
 
     Args:
-        user_name (str): The name of the user to retrieve.
-        session (SessionDep): The database session dependency.
-
+        user_name (str): The exact display
+            name of the profile.
+        session (SessionDep): The injected
+            database session.
     Returns:
-        User: The user object if found.
-
-    Raises:
-        HTTPException: If the user is not found in the database.
+        User: The requested profile
+            data from the database.
     """
     statement = select(User).where(User.name == user_name)
     result = session.exec(statement).first()
     if not result:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     return result
+
+
+@app.post("/maps/", status_code=status.HTTP_201_CREATED)
+def create_map(target_map: Map, session: SessionDep) -> Map:
+    """
+    Initializes and registers a new tactical map environment.
+
+    Args:
+        target_map (Map): The map schema
+            to register and save.
+        session (SessionDep): The injected
+            database session.
+    Returns:
+        Map: The confirmed map schema
+            with a generated UUID.
+    """
+
+    session.add(target_map)
+    session.commit()
+    session.refresh(target_map)
+
+    return target_map
+
+
+@app.post("/targets/", status_code=status.HTTP_201_CREATED)
+def create_targets(target: Target, session: SessionDep) -> Target:
+    """
+    Registers an enemy drone and triggers lane caching.
+
+    Args:
+        target (Target): The target schema
+            to register and save.
+        session (SessionDep): The injected
+            database session.
+    Returns:
+        Target: The confirmed target
+            with a generated UUID.
+    """
+
+    session.add(target)
+    session.commit()
+    session.refresh(target)
+
+    query = select(Map).where(Map.id == target.map_id)
+    target_map = session.exec(query).first()
+    if not target_map:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Map not found"
+        )
+    if not (hasattr(app.state, "target_maps") and app.state.target_maps):
+        app.state.target_maps = {target_map.id: target_map}
+    elif target_map.id not in app.state.target_maps:
+        app.state.target_maps.update({target_map.id: target_map})
+    if not (hasattr(app.state, "target_specs") and app.state.target_specs):
+        app.state.target_specs = {target.id: target}
+    elif target.id not in app.state.target_specs:
+        app.state.target_specs.update({target.id: target})
+
+    return target
+
+
+@app.put("/save_target_state/{target_specs_id}")
+def save_target_state(target_specs_id: str) -> dict:
+    """
+    Caches the lane configuration for a given target specification.
+
+    Args:
+        target_specs_id (str): The UUID of the
+            target specification to cache.
+    Returns:
+        dict: A success message payload
+            confirming caching.
+    """
+    if not (hasattr(app.state, "target_maps") and hasattr(app.state, "target_specs")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No map or target specifications found in application state.",
+        )
+
+    target_map = app.state.target_maps.get(
+        app.state.target_specs[target_specs_id].map_id
+    )
+    target_specs = app.state.target_specs[target_specs_id]
+
+    if not target_map:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Associated map not found."
+        )
+
+    try:
+        save_map_state(target_map, target_specs)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error saving map state: {e}",
+        )
+
+    return {"message": f"Map state for target_specs_id {target_specs_id} saved."}
+
+
+@app.put("/configure_pdf_parameters/")
+def configure_pdf_parameters(
+    start_time: datetime = datetime.now() - timedelta(hours=48),
+    duration: timedelta = timedelta(hours=24),
+    time_steps: int = 50,
+    downsample_step: int = 4,
+) -> dict:
+    """
+    Sets the global timing configuration for the simulation.
+
+    Args:
+        start_time (datetime): The absolute
+            start of the simulation.
+        duration (timedelta): The total
+            simulated cycle duration.
+        time_steps (int): The resolution
+            of the time simulation.
+        downsample_step (int): The scaling
+            factor for matrix size.
+    Returns:
+        dict: A success message payload
+            confirming configuration.
+    """
+
+    app.state.start_time = start_time
+    app.state.duration = duration
+    app.state.time_steps = time_steps
+    app.state.downsample_step = downsample_step
+
+    return {"message": "PDF parameters configured."}

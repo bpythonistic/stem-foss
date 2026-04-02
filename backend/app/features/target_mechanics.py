@@ -1,36 +1,42 @@
 """
-This module contains the target mechanics for the RPG game.
-It defines the logic for calculating target behavior,
-loot distribution, and other related mechanics.
+Defines the mathematical engine for target physics and loot.
 
+- get_target_classes: Retrieves base configurations for tiers.
+- generate_map_heat_points: Creates randomized map nodes.
+- describe_lanes: Generates traffic routes connecting nodes.
+- map_lane_traffic: Maps spatial Gaussian spread for routes.
+- calculate_temporal_lane_traffic: Simulates traffic volume.
+- evaluate_total_pdf: Evaluates combined spatiotemporal PDF.
+- calculate_loot: Calculates reward payouts based on stats.
 """
 
-# import os
-from typing import Generator, Callable
 from datetime import datetime, timedelta
+from typing import Callable, Generator
 
-import numpy.random as npr
 import numpy as np
+import numpy.random as npr
 import polars as pl
 
-from app.schemas.sqlmodels import Target, TargetClass, LootDist, Map
+from app.schemas.sqlmodels import LootDist, Map, Target, TargetClass
 
 npr.seed(42)  # Set a fixed seed for reproducibility
 
 
 def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
     """
-    Get the target configuration based on the target class.
+    Retrieves the base hardware specifications for target tiers.
 
     Args:
-        user_id (str): The ID of the user for whom to generate the target.
+        user_id (str): The unique identifier
+            of the active player.
     Returns:
-        tuple[Target, Target, Target]: A tuple containing the target
-        configurations for small, medium, and large targets.
+        tuple: The small, medium, and large
+            target configurations.
     """
     return (
         Target(
             user_id=user_id,
+            map_id=None,  # To be assigned when linked to a map
             name="Small Target",
             description="A small target with high agility.",
             category=TargetClass.SMALL,
@@ -46,6 +52,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
         ),
         Target(
             user_id=user_id,
+            map_id=None,  # To be assigned when linked to a map
             name="Medium Target",
             description="A medium target with balanced stats.",
             category=TargetClass.MEDIUM,
@@ -61,6 +68,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
         ),
         Target(
             user_id=user_id,
+            map_id=None,  # To be assigned when linked to a map
             name="Large Target",
             description="A large target with low agility.",
             category=TargetClass.LARGE,
@@ -77,29 +85,36 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
     )
 
 
-def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFrame:
+def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.LazyFrame:
     """
-    Generate random heat points for the map.
+    Creates randomized anchor nodes for generating map traffic.
 
     Args:
-        num_points (int): The number
-            of heat points to generate.
-        map_width (float): The width of the map
-            for position constraints.
-        margin (float): The margin to avoid placing heat
-            points too close to the edges of the map.
+        target_map (Map): The map config
+            used to define boundaries.
+        margin (float): The edge padding
+            to prevent clipping nodes.
     Returns:
-        pl.DataFrame: A DataFrame containing the
-            generated heat points with
-            their positions and visit durations.
+        pl.LazyFrame: Generated heat nodes
+            with coordinate locations.
     """
-    return pl.DataFrame(
+    return pl.LazyFrame(
         {
-            "x": npr.uniform(
-                margin, target_map.map_size - margin, target_map.num_heat_points
-            ),  # Random x positions within the map width
-            "y": npr.uniform(
-                margin, target_map.map_size - margin, target_map.num_heat_points
+            "x": pl.Series(
+                "x",
+                npr.uniform(
+                    margin,
+                    target_map.map_size - margin,
+                    target_map.num_heat_points,
+                ),
+            ),
+            "y": pl.Series(
+                "y",
+                npr.uniform(
+                    margin,
+                    target_map.map_size - margin,
+                    target_map.num_heat_points,
+                ),
             ),  # Random y positions within the map width
         }
     )
@@ -107,26 +122,25 @@ def generate_map_heat_points(target_map: Map, margin: float = 5.00) -> pl.DataFr
 
 def describe_lanes(
     target_map: Map,
-    heat_points: pl.DataFrame,
+    heat_points: pl.LazyFrame,
     target_specs: Target,
     stddev_factor: float = 0.2,
-) -> pl.DataFrame:
+) -> pl.LazyFrame:
     """
-    Describe the lanes on the map based on the heat points.
+    Builds randomized parametric routes connecting map nodes.
 
     Args:
-        target_map (Map): The map on which the lanes are located.
-        heat_points (pl.DataFrame): The heat points on the map.
-        target_specs (Target): The specifications for the targets
-            for which to describe lanes.
-        stddev_factor (float): A factor to scale the standard
-            deviation of traffic variability. Default is 0.2,
-            which means the variability will be 20% of the
-            maximum possible variability based on the target's
-            speed and acceleration.
-
+        target_map (Map): The operational
+            zone configuration.
+        heat_points (pl.LazyFrame): The
+            nodes generated for the map.
+        target_specs (Target): The stats
+            used to calculate variance.
+        stddev_factor (float): The scaling
+            modifier for lane variance.
     Returns:
-        pl.DataFrame: A DataFrame containing the description of the lanes.
+        pl.LazyFrame: Lane routes with
+            density and variance params.
     """
 
     match target_specs.category:
@@ -141,36 +155,33 @@ def describe_lanes(
     max_stddev = (
         stddev_factor * (target_specs.top_speed * target_specs.accel_max) ** 0.5
     )
-    x = heat_points.select(pl.col("x")).to_series()
-    y = heat_points.select(pl.col("y")).to_series()
-    return pl.DataFrame(
-        {
-            "x_start": x,
-            "y_start": y,
-            "x_end": x.shift(-1).fill_null(x.first()),
-            "y_end": y.shift(-1).fill_null(y.first()),
-            "traffic_density": npr.uniform(0, 1, target_map.num_heat_points)
-            * (total_targets / target_map.num_heat_points),  # Random traffic density
-            "traffic_stddev": npr.uniform(
-                0.1 * max_stddev, max_stddev, target_map.num_heat_points
-            ),  # Random traffic variability
-        }
+    return heat_points.with_columns(
+        x_start=pl.col("x"),
+        y_start=pl.col("y"),
+        x_end=pl.col("x").shift(-1).fill_null(pl.col("x").first()),
+        y_end=pl.col("y").shift(-1).fill_null(pl.col("y").first()),
+        traffic_density=pl.lit(npr.uniform(0, 1, target_map.num_heat_points))
+        * (total_targets / target_map.num_heat_points),  # Random traffic density
+        traffic_stddev=pl.lit(
+            npr.uniform(0.1 * max_stddev, max_stddev, target_map.num_heat_points)
+        ),  # Random traffic variability
     )
 
 
 def map_lane_traffic(
-    target_map: Map, lanes: pl.DataFrame
+    target_map: Map, lanes: pl.LazyFrame
 ) -> Generator[tuple[pl.LazyFrame, pl.LazyFrame], None, None]:
     """
-    Map the traffic on the lanes based on the traffic density and variability.
+    Calculates the spatial Gaussian spread for map routes.
 
     Args:
-        target_map (Map): The map on which the lanes are located.
-        lanes (pl.DataFrame): The DataFrame containing the description of the lanes.
-
+        target_map (Map): The map bounds
+            for the spatial grid.
+        lanes (pl.LazyFrame): The generated
+            routes connecting nodes.
     Returns:
-        Generator: A generator that yields DataFrames
-            containing the traffic mapped on the lanes and the grid points.
+        Generator: Generates spatial probability
+            matrices per lane.
     """
     x_values = pl.Series(
         "x_values",
@@ -188,7 +199,7 @@ def map_lane_traffic(
         .select(pl.col("x"), pl.col("y").alias("y"))
         .lazy()
     )
-    for lane in lanes.iter_rows(named=True):
+    for lane in lanes.collect().iter_rows(named=True):
         q2 = (
             q1.with_columns(
                 (
@@ -225,33 +236,33 @@ def map_lane_traffic(
 
 
 def calculate_temporal_lane_traffic(
-    lanes: pl.DataFrame,
+    lanes: pl.LazyFrame,
     start_time: datetime,
     duration: timedelta,
     time_steps: int,
 ) -> Generator[pl.LazyFrame, None, None]:
     """
-    Calculate the temporal lane traffic based on the traffic density and variability.
+    Simulates volume surges across lanes using amplitude waves.
 
     Args:
-        lanes (pl.DataFrame): The DataFrame containing the
-            description of the lanes.
-        start_time (datetime): The start time for the
-            temporal traffic evaluation.
-        duration (timedelta): The duration over which
-            to evaluate the temporal traffic.
-        time_steps (int): The number of time steps over a day to simulate.
-
+        lanes (pl.LazyFrame): The routes
+            to apply traffic surges to.
+        start_time (datetime): The absolute
+            start of the simulation.
+        duration (timedelta): The total
+            simulated cycle duration.
+        time_steps (int): The resolution
+            of the time simulation.
     Returns:
-        Generator: A generator that yields LazyFrames
-            containing the temporal traffic patterns for each lane.
+        Generator: Generates traffic volume
+            multipliers over time.
     """
     time_series = pl.Series(
         "time",
         pl.linear_space(start_time, start_time + duration, time_steps, eager=True),
     )
-    num_rush_hours = npr.randint(1, 4, size=lanes.shape[0])
-    for i, lane in enumerate(lanes.iter_rows(named=True)):
+    num_rush_hours = npr.randint(1, 4, size=lanes.collect().shape[0])
+    for i, lane in enumerate(lanes.collect().iter_rows(named=True)):
         rush_hours = pl.Series(
             time_series.sample(num_rush_hours[i], with_replacement=False),
         )
@@ -289,42 +300,42 @@ def calculate_temporal_lane_traffic(
 
 def evaluate_total_pdf(
     target_map: Map,
-    lanes: pl.DataFrame,
+    lanes: pl.LazyFrame,
     start_time: datetime,
     duration: timedelta,
     time_steps: int,
 ) -> Callable[[datetime], pl.LazyFrame]:
     """
-    Evaluate the total PDF state of the map by combining lane and temporal traffic.
+    Combines spatial and temporal matrices into a final PDF.
 
     Args:
-        target_map (Map): The map on which the lanes are located.
-        lanes (pl.DataFrame): The DataFrame containing the
-            description of the lanes.
-        start_time (datetime): The start time for the
-            temporal traffic evaluation.
-        duration (timedelta): The duration over which
-            to evaluate the temporal traffic.
-        time_steps (int): The number of time steps to evaluate.
-
+        target_map (Map): The map bounds
+            for the evaluation grid.
+        lanes (pl.LazyFrame): The routes
+            defining the base traffic.
+        start_time (datetime): The start
+            time of the simulation.
+        duration (timedelta): The length
+            of the simulated cycle.
+        time_steps (int): The resolution
+            of the time simulation.
     Returns:
-        Callable:
-            A function that takes a datetime and returns a generator of LazyFrames
-            containing the total PDF state of the map at that time.
+        Callable: A function that evaluates
+            the PDF at a specific time.
     """
 
     def total_pdf_at_time_per_lane(
         current_time: datetime,
     ) -> Generator[pl.LazyFrame, None, None]:
         """
-        Evaluate the total PDF state of the map at a specific time.
+        Evaluates the probability matrix for an individual route.
 
         Args:
-            current_time (datetime): The time at which to evaluate the PDF.
-
+            current_time (datetime): The exact
+                moment to evaluate traffic.
         Returns:
-            Generator: A generator of LazyFrames containing the total PDF
-                state of the map at the specified time.
+            Generator: The probability states
+                for each individual lane.
         """
         for (lane_traffic, _), temporal_traffic in zip(
             map_lane_traffic(target_map, lanes),
@@ -355,14 +366,14 @@ def evaluate_total_pdf(
 
     def total_pdf_at_time(current_time: datetime) -> pl.LazyFrame:
         """
-        Evaluate the total PDF state of the map at a specific time.
+        Sums the individual route matrices into a master heatmap.
 
         Args:
-            current_time (datetime): The time at which to evaluate the PDF.
-
+            current_time (datetime): The exact
+                moment to evaluate traffic.
         Returns:
-            Generator: A generator of LazyFrames containing the total PDF
-                state of the map at the specified time.
+            pl.LazyFrame: The combined final
+                probability state grid.
         """
         return (
             pl.concat(list(total_pdf_at_time_per_lane(current_time)))
@@ -375,14 +386,14 @@ def evaluate_total_pdf(
 
 def calculate_loot(target: Target) -> float:
     """
-    Calculates the dropped loot value based on the target's statistical parameters.
+    Rolls a randomized reward payout based on target metrics.
 
     Args:
-        target (Target): The target for which to calculate the loot.
-
+        target (Target): The enemy drone
+            containing the drop stats.
     Returns:
-        float: The calculated loot value, constrained
-            within the target's loot_min and loot_max.
+        float: The final randomized
+            loot payout value.
     """
     loot = 0.0
     if target.loot_dist == LootDist.UNIFORM:

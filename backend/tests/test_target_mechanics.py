@@ -7,12 +7,11 @@ functions tested:
 
 from datetime import datetime, timedelta
 
+import app.schemas.sqlmodels as sql_schemas
 import pytest
+from app.features import target_mechanics as tm
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
-
-from app.features import target_mechanics as tm
-import app.schemas.sqlmodels as sql_schemas
 
 
 class TargetSpecsData(BaseModel):
