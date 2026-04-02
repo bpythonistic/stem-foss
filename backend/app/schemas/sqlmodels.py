@@ -253,6 +253,8 @@ class Target(SQLModel, table=True):
                 the enemy drone profile.
             user_id (str): Foreign key linking the
                 target generation to a user state.
+            map_id (str | None): Foreign key linking the
+                target to a specific map configuration.
             name (str): The classification title of
                 the specific drone model.
             description (str): Narrative detail of
@@ -281,6 +283,7 @@ class Target(SQLModel, table=True):
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     user_id: str = Field(...)
+    map_id: str | None = Field(default=None)
     name: str = Field(...)
     description: str = Field(...)
     category: TargetClass = Field(...)

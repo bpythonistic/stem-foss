@@ -8,6 +8,7 @@ It includes tests for:
 
 import json
 from typing import Self, Any
+from pathlib import Path
 
 import pytest
 from fastapi import status
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field
 
 import app.schemas.sqlmodels as sch
 from app.features.target_mechanics import get_target_classes
+from app.features.target_pdf_helpers import save_map_state
 
 
 class DataPair(BaseModel):
@@ -126,11 +128,12 @@ class DataForTests:
 
     TARGET_MAP_DATA: MapPair = MapPair(
         input_data=sch.Map(
+            id="map01",
             user_id="01",
             name="Test Map",
             description="A test map for unit testing purposes.",
             map_size=100.0,
-            samples=50,
+            samples=200,
             num_small_targets=5,
             num_medium_targets=3,
             num_large_targets=2,
@@ -139,12 +142,12 @@ class DataForTests:
         expected_output=(
             status.HTTP_201_CREATED,
             {
-                "id": ...,
+                "id": "map01",
                 "user_id": "01",
                 "name": "Test Map",
                 "description": "A test map for unit testing purposes.",
                 "map_size": 100.0,
-                "samples": 50,
+                "samples": 200,
                 "num_small_targets": 5,
                 "num_medium_targets": 3,
                 "num_large_targets": 2,
@@ -169,13 +172,16 @@ class DataForTests:
             sch.TargetClass.LARGE: 2,
         }
         target_class_idx = target_class_translator[target_size]
+        target_specs = cls.TARGET_DATA[target_class_idx]
+        target_specs.map_id = cls.TARGET_MAP_DATA.input_data.id
         return TargetPair(
-            input_data=cls.TARGET_DATA[target_class_idx],
+            input_data=target_specs,
             expected_output=(
                 status.HTTP_201_CREATED,
                 {
                     "id": ...,
                     "user_id": "01",
+                    "map_id": "map01",
                     "name": ...,
                     "description": ...,
                     "category": target_size,
@@ -242,10 +248,10 @@ def database_setup(client: TestClient, request: pytest.FixtureRequest) -> DataMo
         assert response.status_code == map_arg.expected_output[0]
         assert compare_to_expected_output(response.json(), map_arg.expected_output[1])
 
-    def add_targets(targets_arg: list[TargetPair], map_id: str):
+    def add_targets(targets_arg: list[TargetPair]):
         for target in targets_arg:
             response = client.post(
-                f"/targets/{map_id}",
+                "/targets/",
                 json=json.loads(target.input_data.model_dump_json()),
             )
             assert response.status_code == target.expected_output[0]
@@ -256,7 +262,7 @@ def database_setup(client: TestClient, request: pytest.FixtureRequest) -> DataMo
     add_users(users_in)
     if target_map_in:
         add_map(target_map_in)
-        add_targets(targets_in, target_map_in.input_data.id)
+        add_targets(targets_in)
     return data
 
 
@@ -468,6 +474,9 @@ class TestEndpoints:
     def test_create_targets(
         self: Self,
         database_setup: DataModel,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ):
         """
         Test the target creation endpoint.
@@ -475,9 +484,26 @@ class TestEndpoints:
         Args:
             database_setup (DataModel): The data model
                 for setting up the test database.
-                All of the assertions for the test
-                case are handled in the fixture,
-                so this test function simply verifies
-                that the fixture runs without error.
+            client (TestClient): The test client for making API requests.
+            monkeypatch (pytest.MonkeyPatch): The pytest
+                fixture for monkeypatching functions during testing.
+            tmp_path (Path): The pytest fixture for creating
+                a temporary directory for storing test files.
         """
+        monkeypatch.setattr(
+            "app.main.save_map_state",
+            lambda *args: save_map_state(*args, parquet_path=tmp_path),
+        )
+        for target in database_setup.targets:
+            response = client.put(f"/save_target_state/{target.input_data.id}")
+            assert response.status_code == status.HTTP_200_OK
+            assert compare_to_expected_output(
+                response.json(),
+                {
+                    "message": (
+                        f"Map state for target_specs_id {target.input_data.id} saved."
+                    ),
+                },
+            )
         assert database_setup
+        assert tmp_path.glob("current_lanes_for_*.parquet")

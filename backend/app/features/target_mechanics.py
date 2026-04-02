@@ -36,6 +36,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
     return (
         Target(
             user_id=user_id,
+            map_id=None,  # To be assigned when linked to a map
             name="Small Target",
             description="A small target with high agility.",
             category=TargetClass.SMALL,
@@ -51,6 +52,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
         ),
         Target(
             user_id=user_id,
+            map_id=None,  # To be assigned when linked to a map
             name="Medium Target",
             description="A medium target with balanced stats.",
             category=TargetClass.MEDIUM,
@@ -66,6 +68,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
         ),
         Target(
             user_id=user_id,
+            map_id=None,  # To be assigned when linked to a map
             name="Large Target",
             description="A large target with low agility.",
             category=TargetClass.LARGE,

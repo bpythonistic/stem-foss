@@ -127,21 +127,18 @@ def create_map(target_map: Map, session: SessionDep) -> Map:
     session.add(target_map)
     session.commit()
     session.refresh(target_map)
-    app.state.current_map = target_map
 
     return target_map
 
 
-@app.post("/targets/{map_id}", status_code=status.HTTP_201_CREATED)
-def create_targets(target: Target, map_id: str, session: SessionDep) -> Target:
+@app.post("/targets/", status_code=status.HTTP_201_CREATED)
+def create_targets(target: Target, session: SessionDep) -> Target:
     """
     Registers an enemy drone and triggers lane caching.
 
     Args:
         target (Target): The target schema
             to register and save.
-        map_id (str): The map UUID linked
-            to this enemy drone.
         session (SessionDep): The injected
             database session.
     Returns:
@@ -153,18 +150,61 @@ def create_targets(target: Target, map_id: str, session: SessionDep) -> Target:
     session.commit()
     session.refresh(target)
 
-    query = select(Map).where(Map.id == map_id)
+    query = select(Map).where(Map.id == target.map_id)
     target_map = session.exec(query).first()
     if not target_map:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Map not found"
         )
-    app.state.current_map = target_map
-    app.state.current_target_specs = target
-
-    save_map_state(target_map, target)
+    if not (hasattr(app.state, "target_maps") and app.state.target_maps):
+        app.state.target_maps = {target_map.id: target_map}
+    elif target_map.id not in app.state.target_maps:
+        app.state.target_maps.update({target_map.id: target_map})
+    if not (hasattr(app.state, "target_specs") and app.state.target_specs):
+        app.state.target_specs = {target.id: target}
+    elif target.id not in app.state.target_specs:
+        app.state.target_specs.update({target.id: target})
 
     return target
+
+
+@app.put("/save_target_state/{target_specs_id}")
+def save_target_state(target_specs_id: str) -> dict:
+    """
+    Caches the lane configuration for a given target specification.
+
+    Args:
+        target_specs_id (str): The UUID of the
+            target specification to cache.
+    Returns:
+        dict: A success message payload
+            confirming caching.
+    """
+    if not (hasattr(app.state, "target_maps") and hasattr(app.state, "target_specs")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No map or target specifications found in application state.",
+        )
+
+    target_map = app.state.target_maps.get(
+        app.state.target_specs[target_specs_id].map_id
+    )
+    target_specs = app.state.target_specs[target_specs_id]
+
+    if not target_map:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Associated map not found."
+        )
+
+    try:
+        save_map_state(target_map, target_specs)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error saving map state: {e}",
+        )
+
+    return {"message": f"Map state for target_specs_id {target_specs_id} saved."}
 
 
 @app.put("/configure_pdf_parameters/")

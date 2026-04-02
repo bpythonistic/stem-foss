@@ -10,6 +10,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 from functools import lru_cache
+from pathlib import Path
 
 import polars as pl
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -24,8 +25,12 @@ from app.schemas.sqlmodels import Target
 
 router = APIRouter()
 
+PARQUET_DIR = Path(__file__).parent.parent / "data" / "parquet_cache"
 
-def save_map_state(target_map: TargetMap, target_specs: Target) -> None:
+
+def save_map_state(
+    target_map: TargetMap, target_specs: Target, parquet_path: Path | None = None
+) -> None:
     """
     Caches the static map routes to a file for rapid loading.
 
@@ -34,6 +39,7 @@ def save_map_state(target_map: TargetMap, target_specs: Target) -> None:
             operational zone map.
         target_specs (Target): The stats
             used to calculate variance.
+        parquet_path (Path | None): The path where the Parquet file will be saved.
     Returns:
         None: Operations are saved directly
             to the local disk.
@@ -41,7 +47,10 @@ def save_map_state(target_map: TargetMap, target_specs: Target) -> None:
 
     heat_points = generate_map_heat_points(target_map)
     lanes_lf = describe_lanes(target_map, heat_points, target_specs)
-    lanes_lf.collect().write_parquet(f"current_lanes_for_{target_specs.id}.parquet")
+    data_dir = PARQUET_DIR if parquet_path is None else parquet_path
+    lanes_lf.collect().write_parquet(
+        data_dir / f"current_lanes_for_{target_specs.id}.parquet"
+    )
 
 
 @lru_cache(maxsize=128)
@@ -75,7 +84,15 @@ def get_echarts_payload(
     """
 
     target_map = TargetMap(**json.loads(target_map_str))
-    lanes = pl.scan_parquet(f"current_lanes_for_{target_specs_id}.parquet")
+    try:
+        lanes = pl.scan_parquet(
+            PARQUET_DIR / f"current_lanes_for_{target_specs_id}.parquet"
+        )
+    except FileNotFoundError:
+        raise ValueError(
+            "Lane configuration for target_specs_id "
+            f"{target_specs_id} not found in cache."
+        )
 
     # 1. Run the core physics engine
     pdf_at_time = evaluate_total_pdf(
@@ -135,14 +152,16 @@ def get_echarts_payload(
     )
 
 
-@router.websocket("/ws/tactical-map")
-async def tactical_map_stream(websocket: WebSocket):
+@router.websocket("/ws/tactical-map/{target_id}")
+async def tactical_map_stream(websocket: WebSocket, target_id: str):
     """
     Manages the WebSocket connection for real-time map updates.
 
     Args:
         websocket (WebSocket): The active
             client socket connection.
+        target_id (str): The UUID of the
+            current target specification to load.
     Returns:
         None: Manages the async event
             loop for the connection.
@@ -151,8 +170,21 @@ async def tactical_map_stream(websocket: WebSocket):
 
     # State pointer for the latest time requested by the client
     latest_requested_time = None
-    target_map_str: str = websocket.app.state.current_map.model_dump_json()
-    target_specs_id: str = websocket.app.state.current_target_specs.id
+    current_target_specs = websocket.app.state.target_specs.get(target_id)
+    if not current_target_specs:
+        await websocket.send_text(
+            json.dumps({"error": "Target specifications not found."})
+        )
+        await websocket.close()
+        return
+    current_map_obj = websocket.app.state.target_maps.get(current_target_specs.map_id)
+    if not current_map_obj:
+        await websocket.send_text(
+            json.dumps({"error": "Current map configuration not found."})
+        )
+        await websocket.close()
+        return
+    target_map_str: str = current_map_obj.model_dump_json()
     start_time: datetime = websocket.app.state.start_time
     time_duration: timedelta = websocket.app.state.duration
     time_steps: int = websocket.app.state.time_steps
@@ -184,7 +216,7 @@ async def tactical_map_stream(websocket: WebSocket):
                 payload_json = await asyncio.to_thread(
                     get_echarts_payload,
                     target_map_str=target_map_str,
-                    target_specs_id=target_specs_id,
+                    target_specs_id=target_id,
                     duration=time_duration,
                     time_steps=time_steps,
                     target_time=time_to_process,
