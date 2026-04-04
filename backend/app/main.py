@@ -16,8 +16,9 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
 
+from app.features.target_pdf_helpers import clear_parquet_cache, save_map_state
 from app.features.target_pdf_helpers import router as target_pdf_router
-from app.features.target_pdf_helpers import save_map_state
+from app.schemas.pydmodels import GenericMessage
 from app.schemas.sqlmodels import (
     Map,
     SessionDep,
@@ -50,15 +51,15 @@ app.include_router(target_pdf_router)
 
 
 @app.get("/")
-def read_root():
+def read_root() -> GenericMessage:
     """
     Verifies that the backend API is online and responding.
 
     Returns:
-        dict: A health check success
+        GenericMessage: A health check success
             message payload.
     """
-    return {"message": "Welcome to the Project Netfall Backend API!"}
+    return GenericMessage(message="Welcome to the Project Netfall Backend API!")
 
 
 @app.post("/users/", status_code=status.HTTP_201_CREATED)
@@ -169,7 +170,7 @@ def create_targets(target: Target, session: SessionDep) -> Target:
 
 
 @app.put("/save_target_state/{target_specs_id}")
-def save_target_state(target_specs_id: str) -> dict:
+def save_target_state(target_specs_id: str) -> GenericMessage:
     """
     Caches the lane configuration for a given target specification.
 
@@ -177,7 +178,7 @@ def save_target_state(target_specs_id: str) -> dict:
         target_specs_id (str): The UUID of the
             target specification to cache.
     Returns:
-        dict: A success message payload
+        GenericMessage: A success message payload
             confirming caching.
     """
     if not (hasattr(app.state, "target_maps") and hasattr(app.state, "target_specs")):
@@ -204,36 +205,57 @@ def save_target_state(target_specs_id: str) -> dict:
             detail=f"Error saving map state: {e}",
         )
 
-    return {"message": f"Map state for target_specs_id {target_specs_id} saved."}
+    return GenericMessage(
+        message=f"Map state for target_specs_id {target_specs_id} saved."
+    )
+
+
+@app.delete("/clear_cache/")
+def clear_cache() -> GenericMessage:
+    """
+    Clears all cached Parquet files.
+
+    Returns:
+        GenericMessage: A success message payload confirming cache clearing.
+    """
+    try:
+        clear_parquet_cache()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error clearing cache: {e}",
+        )
+
+    return GenericMessage(message="Cache cleared.")
 
 
 @app.put("/configure_pdf_parameters/")
 def configure_pdf_parameters(
-    start_time: datetime = datetime.now() - timedelta(hours=48),
-    duration: timedelta = timedelta(hours=24),
+    hours_before_now: float = 48.0,
+    duration_hours: float = 24.0,
     time_steps: int = 50,
     downsample_step: int = 4,
-) -> dict:
+) -> GenericMessage:
     """
     Sets the global timing configuration for the simulation.
 
     Args:
-        start_time (datetime): The absolute
-            start of the simulation.
-        duration (timedelta): The total
-            simulated cycle duration.
+        hours_before_now (float): The number of hours
+            before the current time to start the simulation.
+        duration_hours (float): The total duration
+            of the simulation in hours.
         time_steps (int): The resolution
             of the time simulation.
         downsample_step (int): The scaling
             factor for matrix size.
     Returns:
-        dict: A success message payload
+        GenericMessage: A success message payload
             confirming configuration.
     """
 
-    app.state.start_time = start_time
-    app.state.duration = duration
+    app.state.start_time = datetime.now() - timedelta(hours=hours_before_now)
+    app.state.duration = timedelta(hours=duration_hours)
     app.state.time_steps = time_steps
     app.state.downsample_step = downsample_step
 
-    return {"message": "PDF parameters configured."}
+    return GenericMessage(message="PDF parameters configured.")

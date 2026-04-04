@@ -53,6 +53,28 @@ def save_map_state(
     )
 
 
+def clear_parquet_cache(parquet_path: Path | None = None) -> None:
+    """
+    Clears all cached Parquet files from the specified directory.
+
+    Args:
+        parquet_path (Path | None): The path to the directory
+            containing Parquet files. If None, defaults to
+            the standard cache directory.
+
+    Returns:
+        None: The function performs file deletion directly
+            on the local disk.
+    """
+    data_dir = PARQUET_DIR if parquet_path is None else parquet_path
+    for file in data_dir.glob("current_lanes_for_*.parquet"):
+        try:
+            file.unlink()
+            print(f"Deleted cached file: {file}")
+        except Exception as e:
+            print(f"Error deleting file {file}: {e}")
+
+
 @lru_cache(maxsize=128)
 def get_echarts_payload(
     target_map_str: str,

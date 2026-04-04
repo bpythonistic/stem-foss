@@ -34,6 +34,7 @@ ruff = "*"
 pre-commit = "*"
 uvicorn = "*"
 polars = ">=1.38.1,<2"
+npx = ">=0.1.1,<0.2"
 
 [feature.py311.dependencies]
 python = "3.11.*"
