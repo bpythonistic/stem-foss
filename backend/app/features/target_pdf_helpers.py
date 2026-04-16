@@ -13,13 +13,14 @@ from functools import lru_cache
 from pathlib import Path
 
 import polars as pl
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from app.features.target_mechanics import (
     describe_lanes,
     evaluate_total_pdf,
     generate_map_heat_points,
 )
+from app.schemas.pydmodels import SimulationState, get_sim_state
 from app.schemas.sqlmodels import Map as TargetMap
 from app.schemas.sqlmodels import Target
 
@@ -51,6 +52,28 @@ def save_map_state(
     lanes_lf.collect().write_parquet(
         data_dir / f"current_lanes_for_{target_specs.id}.parquet"
     )
+
+
+def clear_parquet_cache(parquet_path: Path | None = None) -> None:
+    """
+    Clears all cached Parquet files from the specified directory.
+
+    Args:
+        parquet_path (Path | None): The path to the directory
+            containing Parquet files. If None, defaults to
+            the standard cache directory.
+
+    Returns:
+        None: The function performs file deletion directly
+            on the local disk.
+    """
+    data_dir = PARQUET_DIR if parquet_path is None else parquet_path
+    for file in data_dir.glob("current_lanes_for_*.parquet"):
+        try:
+            file.unlink()
+            print(f"Deleted cached file: {file}")
+        except Exception as e:
+            print(f"Error deleting file {file}: {e}")
 
 
 @lru_cache(maxsize=128)
@@ -153,7 +176,11 @@ def get_echarts_payload(
 
 
 @router.websocket("/ws/tactical-map/{target_id}")
-async def tactical_map_stream(websocket: WebSocket, target_id: str):
+async def tactical_map_stream(
+    websocket: WebSocket,
+    target_id: str,
+    state: SimulationState = Depends(get_sim_state),
+):
     """
     Manages the WebSocket connection for real-time map updates.
 
@@ -170,14 +197,16 @@ async def tactical_map_stream(websocket: WebSocket, target_id: str):
 
     # State pointer for the latest time requested by the client
     latest_requested_time = None
-    current_target_specs = websocket.app.state.target_specs.get(target_id)
+    current_target_specs = state.target_specs.get(target_id)
     if not current_target_specs:
         await websocket.send_text(
             json.dumps({"error": "Target specifications not found."})
         )
         await websocket.close()
         return
-    current_map_obj = websocket.app.state.target_maps.get(current_target_specs.map_id)
+    current_map_obj = state.target_maps.get(
+        current_target_specs.map_id if current_target_specs.map_id else ""
+    )
     if not current_map_obj:
         await websocket.send_text(
             json.dumps({"error": "Current map configuration not found."})
@@ -185,10 +214,10 @@ async def tactical_map_stream(websocket: WebSocket, target_id: str):
         await websocket.close()
         return
     target_map_str: str = current_map_obj.model_dump_json()
-    start_time: datetime = websocket.app.state.start_time
-    time_duration: timedelta = websocket.app.state.duration
-    time_steps: int = websocket.app.state.time_steps
-    downsample_step: int = websocket.app.state.downsample_step
+    start_time: datetime = state.start_time
+    time_duration: timedelta = state.duration
+    time_steps: int = state.time_steps
+    downsample_step: int = state.downsample_step
 
     async def process_and_send():
         """

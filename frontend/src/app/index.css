@@ -1,0 +1,46 @@
+/* 1. Define the palette globally */
+:root {
+  --radar-bg: #0a0e17;
+  --radar-panel: #111827;
+  --neon-green: #10b981;
+  --neon-green-glow: rgba(16, 185, 129, 0.4);
+  --neon-blue: #3b82f6;
+  --text-muted: #9ca3af;
+  --border-color: #1f2937;
+
+  /* Ensure the browser knows this is a dark theme for default UI elements */
+  color-scheme: dark;
+}
+
+/* 2. Apply the base theme to the entire viewport */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--radar-bg);
+  color: var(--neon-green);
+  font-family: 'Courier New', Courier, monospace; /* Set global font */
+  min-height: 100vh;
+
+  /* Optional: Smooth out the font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 3. Reset standard elements to fit the theme */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--neon-green);
+  text-shadow: 0 0 8px var(--neon-green-glow);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+input,
+button,
+select {
+  font-family: inherit;
+}

@@ -51,5 +51,5 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true
   },
-  "include": ["./src/**/*", "vite.config.ts"]
+  "include": ["./frontend/src/**/*", "vite.config.ts"]
 }

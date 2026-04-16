@@ -1,0 +1,65 @@
+/* App.css */
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* Background is handled by body tag in index.css */
+}
+
+.app-header {
+  text-align: center;
+  padding: 1rem;
+  background-color: var(--radar-panel);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.app-layout {
+  display: flex;
+  flex: 1; /* Takes up remaining vertical space below header */
+  padding: 2rem;
+  gap: 2rem; /* Creates clean spacing between the two components */
+  max-width: 1800px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sidebar {
+  flex: 0 0 450px; /* Forces the sidebar to stay exactly 450px wide */
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1; /* Allows the map container to fill the remaining horizontal space */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* --- Responsive Fallback --- */
+/* If the screen is too small, stack them vertically instead */
+@media (max-width: 1200px) {
+  .app-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .sidebar {
+    flex: none;
+    width: 100%;
+    max-width: 600px;
+  }
+
+  .main-content {
+    width: 100%;
+  }
+}
