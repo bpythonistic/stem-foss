@@ -127,7 +127,7 @@ See [sqlmodels.py](backend/app/schemas/sqlmodels.py) for up-to-date schemas.
 
 ### Backend Setup
 
-```bash
+```shell
 # Clone the repository
 git clone https://github.com/bpythonistic/stem-foss.git
 cd stem-foss
@@ -136,7 +136,7 @@ cd stem-foss
 pixi install
 
 # Create .env file
-cp back-end/app/.env.example back-end/app/.env
+cp backend/app/.env.example backend/app/.env
 ```
 
 The API will be available at [http://localhost:8000](http://localhost:8000).
@@ -147,7 +147,7 @@ You can view the interactive docs at [http://localhost:8000/docs](http://localho
 
 Once the API server is running, open a new terminal before proceeding.
 
-```bash
+```shell
 # Install dependencies
 pixi run update-nodejs
 # Launch Web UI
@@ -156,19 +156,42 @@ pixi run frontend
 
 The game client will be available at [http://localhost:5173](http://localhost:5173)
 
-### Database Setup (not yet implemented)
+### Database Setup
 
 Ensure PostgreSQL is not already globally installed and running before proceeding.
 
-```bash
+```shell
 pixi run create-db
+```
+
+### Launch Development Application
+
+```shell
+# Run the API server and connect to postgreSQL
+pixi run backend
+# Start the development client
+pixi run frontend
 ```
 
 ### Backend Unit Tests
 
-```bash
+```shell
 # Run backend unit tests (pytest)
 pixi run test-all
+```
+
+### Account for Schema Updates
+
+```shell
+# Clear the contents of an outdated database
+pixi run clear-db
+```
+
+### View PostgreSQL Logfile (for debugging)
+
+```shell
+# Read the contents of the PostgreSQL server's logfile
+pixi run read-db-logs
 ```
 
 ## 🤝 Contributing

@@ -101,12 +101,13 @@ def get_user(user_name: str, session: SessionDep) -> User:
             data from the database.
     """
     statement = select(User).where(User.name == user_name)
-    result = session.exec(statement).first()
-    if not result:
+    result = session.exec(statement)
+    user_obj = result.first()
+    if not user_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
-    return result
+    return user_obj
 
 
 @app.post("/maps/", status_code=status.HTTP_201_CREATED)
@@ -129,6 +130,23 @@ def create_map(target_map: Map, session: SessionDep) -> Map:
     session.refresh(target_map)
 
     return target_map
+
+
+@app.get("/maps/")
+def get_maps(session: SessionDep) -> list[Map]:
+    """
+    Retrieves all existing tactical map configurations from the database.
+
+    Args:
+        session (SessionDep): The injected database session.
+
+    Returns:
+        list[Map]: A list of all requested map data from the database.
+    """
+    statement = select(Map).order_by(Map.name)
+    result = session.exec(statement)
+    map_objs = list(result.fetchall())
+    return map_objs
 
 
 @app.post("/targets/", status_code=status.HTTP_201_CREATED)
@@ -168,9 +186,28 @@ def create_targets(
     return target
 
 
+@app.get("/targets/")
+def get_targets(session: SessionDep) -> list[Target]:
+    """
+    Retrieves all existing target specifications from the database.
+
+    Args:
+        session (SessionDep): The injected database session.
+    Returns:
+        list[Target]: A list of all requested target specifications from the database.
+    """
+    statement = select(Target).order_by(Target.name)
+    result = session.exec(statement)
+    target_objs = list(result.fetchall())
+    return target_objs
+
+
 @app.put("/save_target_state/{target_specs_id}")
 def save_target_state(
-    target_specs_id: str, current_sim_state: SimulationState = Depends(get_sim_state)
+    target_specs_id: str,
+    session: SessionDep,
+    load_from_db: bool = False,
+    current_sim_state: SimulationState = Depends(get_sim_state),
 ) -> GenericMessage:
     """
     Caches the lane configuration for a given target specification.
@@ -178,16 +215,36 @@ def save_target_state(
     Args:
         target_specs_id (str): The UUID of the
             target specification to cache.
+        load_from_db (bool): Whether to load the target
+            specification from the database.
     Returns:
         GenericMessage: A success message payload
             confirming caching.
     """
+    if load_from_db:
+        statement = select(Target).order_by(Target.name)
+        result = session.exec(statement)
+        target_objs = [obj for obj in result.fetchall() if obj.id == target_specs_id]
+        if not target_objs:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Target specifications not found.",
+            )
+        query = select(Map).where(Map.id == target_objs[0].map_id)
+        target_map = session.exec(query).first()
+        if not target_map:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Associated map not found.",
+            )
+        current_sim_state.target_maps[target_map.id] = target_map
+        current_sim_state.target_specs[target_objs[0].id] = target_objs[0]
+
     if not current_sim_state.target_maps or not current_sim_state.target_specs:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No map or target specifications found in simulation state.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target specifications or map not found in current simulation state.",
         )
-
     target_specs = current_sim_state.target_specs.get(target_specs_id)
     if not target_specs:
         raise HTTPException(

@@ -49,10 +49,20 @@ class SimulationState(BaseModel):
 
     target_maps: dict[str, Map]
     target_specs: dict[str, Target]
-    start_time: datetime
-    duration: timedelta
-    time_steps: int
-    downsample_step: int
+    start_time: datetime = Field(
+        ..., description="The starting time of the simulation."
+    )
+    duration: timedelta = Field(
+        ..., description="The total duration of the simulation."
+    )
+    time_steps: int = Field(
+        ..., description="The number of time steps in the simulation.", ge=1
+    )
+    downsample_step: int = Field(
+        ...,
+        description="The step size for downsampling data in the simulation.",
+        ge=1,
+    )
 
 
 # Instantiate a global singleton

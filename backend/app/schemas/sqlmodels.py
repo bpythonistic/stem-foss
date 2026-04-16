@@ -23,10 +23,6 @@ from uuid import uuid4
 from fastapi.params import Depends
 from sqlmodel import Field, Session, SQLModel, create_engine
 
-DEFAULT_CONNECTION_STRING = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://postgres@localhost:5432/stem_db"
-)
-
 
 class Category(str, Enum):
     """
@@ -339,12 +335,15 @@ class Map(SQLModel, table=True):
 
 def get_session() -> Generator[Session, None, None]:
     """
-    Injects a PostgreSQL database session into route handlers.
+    Injects a SQLite database session into route handlers.
 
     Yields:
         Generator: An active SQLModel db session instance.
     """
-    engine = create_engine(DEFAULT_CONNECTION_STRING)
+    engine = create_engine(
+        os.getenv("DATABASE_URL", "sqlite:///stem.db"),
+        connect_args={"check_same_thread": False},
+    )
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
