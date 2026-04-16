@@ -6,19 +6,7 @@ platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
-init-db = "(cd ./postgresql/base) || mkdir -p ./postgresql && initdb -D ./postgresql"
-check-db-server = "psql -U postgres -d stem_db -c 'CREATE TABLE Test (id INT PRIMARY KEY);DROP TABLE Test' > /dev/null"
-start-db-server = "(pixi run check-db-server) || pg_ctl start -D ./postgresql -o '-h localhost -p 5432' -l ./postgresql/logfile"
-stop-db-server = "(pixi run check-db-server) || pg_ctl stop -D ./postgresql"
-create-db = { cmd = "createuser postgres && createdb --owner postgres stem_db", depends-on = [
-    "init-db",
-    "start-db-server",
-] }
 backend = "cd backend && uvicorn app.main:app --reload --env-file app/.env"
-read-db-logs = "cat ./postgresql/logfile"
-clear-db = { cmd = "psql -U postgres -d nyquist_db -c 'DROP SCHEMA public CASCADE;CREATE SCHEMA public;'", depends-on = [
-    "start-db-server",
-] }
 update-nodejs = "npm install --save-dev"
 compile-ts = "tsc"
 watch-ts = "tsc -w"
