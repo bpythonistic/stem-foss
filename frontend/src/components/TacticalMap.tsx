@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { EChartsReact } from 'react-echarts-library';
 import type { EChartsOption } from 'echarts';
+import './TacticalMap.css';
 
 interface echartsPayload {
   x: number[];
@@ -9,65 +10,38 @@ interface echartsPayload {
   max_pdf: number;
 }
 
-interface styleInterface {
-  container: React.CSSProperties;
-  title: React.CSSProperties;
-  slider: React.CSSProperties;
-  radio: React.CSSProperties;
-  chart: React.CSSProperties;
+interface TacticalMapProps {
+  configVersion: number;
 }
 
-const styles: styleInterface = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    padding: '20px',
-    backgroundColor: '#1e1e1e',
-    borderRadius: '8px',
-    width: '100%',
-    height: '100%',
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: '20px',
-  },
-  slider: {
-    width: '80%',
-    marginBottom: '20px',
-  },
-  radio: {
-    margin: '0 10px',
-  },
-  chart: {
-    width: '100%',
-    height: '400px',
-  },
-};
-
-const TacticalMap: React.FC = () => {
-  const [payload, setPayload] = useState<echartsPayload | null>(null);
+const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
+  const [payload] = useState<echartsPayload | null>(null);
   const [relSeconds, setRelSeconds] = useState<number | null>(null);
-  const [theme, setTheme] = useState<string>('dark');
+  const [timeRange] = useState<{
+    min: number;
+    max: number;
+    step: number;
+  }>({
+    min: 0,
+    max: 86100,
+    step: 300,
+  });
   const [options, setOptions] = useState<EChartsOption>({});
   const websocketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws/tactical-map/');
-    websocketRef.current = ws;
-    websocketRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setPayload(data.payload);
-    };
-
-    return () => {
-      if (websocketRef.current) {
-        websocketRef.current.close();
-      }
-    };
-  }, []);
+    // const ws = new WebSocket('ws://localhost:8000/ws/tactical-map/');
+    // websocketRef.current = ws;
+    // websocketRef.current.onmessage = (event) => {
+    //   const data = JSON.parse(event.data);
+    //   setPayload(data.payload);
+    // };
+    // return () => {
+    //   if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+    //     websocketRef.current.close();
+    //   }
+    // };
+  }, [configVersion]);
 
   useEffect(() => {
     websocketRef.current?.send(JSON.stringify({ rel_seconds: relSeconds }));
@@ -134,42 +108,47 @@ const TacticalMap: React.FC = () => {
   }, [payload]);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.title}>Tactical Map</div>
-      <input
-        type="radio"
-        style={styles.radio}
-        name="theme"
-        value="dark"
-        checked={theme === 'dark'}
-        onChange={() => setTheme('dark')}
-      />
-      <input
-        type="radio"
-        style={styles.radio}
-        name="theme"
-        value="light"
-        checked={theme === 'light'}
-        onChange={() => setTheme('light')}
-      />
-      <input
-        type="range"
-        style={styles.slider}
-        min={0}
-        max={86400}
-        step={300}
-        value={relSeconds ?? 0}
-        onChange={(e) => setRelSeconds(parseInt(e.target.value))}
-      />
-      <EChartsReact
-        option={options}
-        notMerge={true}
-        lazyUpdate={true}
-        style={styles.chart}
-        showLoading={payload === null}
-        loadingOption={{ text: 'Loading tactical map...' }}
-        theme={theme}
-      />
+    <div className="tactical-map-container">
+      <h2 className="tactical-title">Target Prediction Heatmap for Project Netfall</h2>
+
+      <div className="tactical-slider-wrapper">
+        <input
+          type="range"
+          className="tactical-slider"
+          min={timeRange.min}
+          max={timeRange.max}
+          step={timeRange.step}
+          value={relSeconds ?? 0}
+          onChange={(e) => setRelSeconds(parseInt(e.target.value))}
+        />
+      </div>
+
+      <p className="tactical-time-display">
+        T+{' '}
+        {Math.floor(relSeconds ? relSeconds / 3600 : 0)
+          .toString()
+          .padStart(2, '0')}
+        :
+        {Math.floor((relSeconds ? relSeconds % 3600 : 0) / 60)
+          .toString()
+          .padStart(2, '0')}
+      </p>
+
+      <div className="tactical-canvas-wrapper">
+        {payload ? (
+          <EChartsReact
+            option={options}
+            style={{ height: '100%', width: '100%' }}
+            notMerge={true}
+            lazyUpdate={true}
+            theme={'dark'}
+          />
+        ) : (
+          <div className="tactical-loading">
+            <p>Initializing sensor array...</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

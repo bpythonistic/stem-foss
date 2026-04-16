@@ -1,40 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import './MapConfigUI.css';
 
-interface styleInterface {
-  container: React.CSSProperties;
-  title: React.CSSProperties;
-  slider: React.CSSProperties;
-  updateButton: React.CSSProperties;
+interface MapConfigUIProps {
+  onConfigChange: () => void;
 }
 
-const styles: styleInterface = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    padding: '20px',
-  },
-  title: {
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
-    marginBottom: '10px',
-  },
-  slider: {
-    width: '100%',
-    marginBottom: '20px',
-  },
-  updateButton: {
-    padding: '10px 20px',
-    backgroundColor: '#007bff',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-};
-
-const MapConfigUI: React.FC = () => {
-  const [hoursBeforeNow, setHoursBeforeNow] = useState<number>(48);
+const MapConfigUI: React.FC<MapConfigUIProps> = ({ onConfigChange }) => {
+  const [hoursBeforeNow, setHoursBeforeNow] = useState<number>(-48);
   const [durationHours, setDurationHours] = useState<number>(24);
   const [timeSteps, setTimeSteps] = useState<number>(50);
   const [downsampleStep, setDownsampleStep] = useState<number>(4);
@@ -52,60 +24,66 @@ const MapConfigUI: React.FC = () => {
     //     downsample_step: downsampleStep,
     //   }),
     // });
+    onConfigChange();
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Tactical Map Configuration</h2>
-      <label>
-        Hours Before Now:
+    <div className="map-config-container">
+      <h2 className="map-config-title">Data Collection Configuration</h2>
+
+      <label className="map-config-label">
+        First Timestamp (Hours Before Now): {hoursBeforeNow}
         <input
           type="range"
-          min={0}
-          max={168}
+          className="map-config-slider"
+          min={-168}
+          max={-36}
           step={4}
           value={hoursBeforeNow}
           onChange={(e) => setHoursBeforeNow(Number(e.target.value))}
-          style={styles.slider}
         />
       </label>
-      <label>
-        Duration (Hours):
+
+      <label className="map-config-label">
+        Collection Duration (Hours): {durationHours}
         <input
           type="range"
-          min={1}
+          className="map-config-slider"
+          min={4}
           max={24}
-          step={1}
+          step={2}
           value={durationHours}
           onChange={(e) => setDurationHours(Number(e.target.value))}
-          style={styles.slider}
         />
       </label>
-      <label>
-        Time Steps:
+
+      <label className="map-config-label">
+        Number of Time Samples: {timeSteps}
         <input
           type="range"
+          className="map-config-slider"
           min={10}
           max={100}
           step={1}
           value={timeSteps}
           onChange={(e) => setTimeSteps(Number(e.target.value))}
-          style={styles.slider}
         />
       </label>
-      <label>
-        Downsample Step:
+
+      <label className="map-config-label">
+        Downsample Step: {downsampleStep}
         <input
           type="range"
+          className="map-config-slider"
           min={1}
           max={10}
           step={1}
           value={downsampleStep}
           onChange={(e) => setDownsampleStep(Number(e.target.value))}
-          style={styles.slider}
         />
       </label>
-      <button style={styles.updateButton} onClick={handleUpdateConfig}>
+
+      <button className="map-config-button" onClick={handleUpdateConfig}>
         Update Configuration
       </button>
     </div>

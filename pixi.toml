@@ -19,6 +19,11 @@ compile-ts = "tsc"
 watch-ts = "tsc -w"
 build = "npm run build"
 pre-commit = "npx lint-staged && ruff check --fix && ruff format"
+frontend = { cmd = "(pixi run watch-ts &) ; npm run dev", depends-on = [
+    "update-nodejs",
+    "compile-ts",
+] }
+backend-tests = "pytest --cov=app backend/tests/"
 
 [dependencies]
 python = ">=3.11"
@@ -53,9 +58,6 @@ sqlite = "*"
 pytest = "*"
 pytest-cov = "*"
 
-[feature.test.tasks]
-backend-tests = "pytest --cov=app backend/tests/"
-
 [tool.ruff]
 line-length = 88
 
@@ -63,7 +65,16 @@ line-length = 88
 docstring-code-format = true
 
 [environments]
+default = ["py314"]
 test-py311 = ["py311", "test"]
 test-py312 = ["py312", "test"]
 test-py313 = ["py313", "test"]
 test-py314 = ["py314", "test"]
+
+[tasks.test-all]
+depends-on = [
+    { task = "backend-tests", environment = "test-py311" },
+    { task = "backend-tests", environment = "test-py312" },
+    { task = "backend-tests", environment = "test-py313" },
+    { task = "backend-tests", environment = "test-py314" },
+]

@@ -150,6 +150,8 @@ Once the API server is running, open a new terminal before proceeding.
 ```bash
 # Install dependencies
 pixi run update-nodejs
+# Launch Web UI
+pixi run frontend
 ```
 
 The game client will be available at [http://localhost:5173](http://localhost:5173)
@@ -166,7 +168,7 @@ pixi run create-db
 
 ```bash
 # Run backend unit tests (pytest)
-pixi run -e test-py314 backend-tests
+pixi run test-all
 ```
 
 ## 🤝 Contributing

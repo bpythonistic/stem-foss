@@ -10,15 +10,14 @@ Defines the FastAPI application and REST API endpoints.
 """
 
 import os
-from datetime import datetime, timedelta
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
 
 from app.features.target_pdf_helpers import clear_parquet_cache, save_map_state
 from app.features.target_pdf_helpers import router as target_pdf_router
-from app.schemas.pydmodels import GenericMessage
+from app.schemas.pydmodels import GenericMessage, SimulationState, get_sim_state
 from app.schemas.sqlmodels import (
     Map,
     SessionDep,
@@ -133,7 +132,11 @@ def create_map(target_map: Map, session: SessionDep) -> Map:
 
 
 @app.post("/targets/", status_code=status.HTTP_201_CREATED)
-def create_targets(target: Target, session: SessionDep) -> Target:
+def create_targets(
+    target: Target,
+    session: SessionDep,
+    current_sim_state: SimulationState = Depends(get_sim_state),
+) -> Target:
     """
     Registers an enemy drone and triggers lane caching.
 
@@ -142,6 +145,8 @@ def create_targets(target: Target, session: SessionDep) -> Target:
             to register and save.
         session (SessionDep): The injected
             database session.
+        current_sim_state (SimulationState):
+            The current simulation state (injected).
     Returns:
         Target: The confirmed target
             with a generated UUID.
@@ -157,20 +162,16 @@ def create_targets(target: Target, session: SessionDep) -> Target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Map not found"
         )
-    if not (hasattr(app.state, "target_maps") and app.state.target_maps):
-        app.state.target_maps = {target_map.id: target_map}
-    elif target_map.id not in app.state.target_maps:
-        app.state.target_maps.update({target_map.id: target_map})
-    if not (hasattr(app.state, "target_specs") and app.state.target_specs):
-        app.state.target_specs = {target.id: target}
-    elif target.id not in app.state.target_specs:
-        app.state.target_specs.update({target.id: target})
+    current_sim_state.target_maps[target_map.id] = target_map
+    current_sim_state.target_specs[target.id] = target
 
     return target
 
 
 @app.put("/save_target_state/{target_specs_id}")
-def save_target_state(target_specs_id: str) -> GenericMessage:
+def save_target_state(
+    target_specs_id: str, current_sim_state: SimulationState = Depends(get_sim_state)
+) -> GenericMessage:
     """
     Caches the lane configuration for a given target specification.
 
@@ -181,17 +182,22 @@ def save_target_state(target_specs_id: str) -> GenericMessage:
         GenericMessage: A success message payload
             confirming caching.
     """
-    if not (hasattr(app.state, "target_maps") and hasattr(app.state, "target_specs")):
+    if not current_sim_state.target_maps or not current_sim_state.target_specs:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No map or target specifications found in application state.",
+            detail="No map or target specifications found in simulation state.",
         )
 
-    target_map = app.state.target_maps.get(
-        app.state.target_specs[target_specs_id].map_id
-    )
-    target_specs = app.state.target_specs[target_specs_id]
+    target_specs = current_sim_state.target_specs.get(target_specs_id)
+    if not target_specs:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target specifications not found.",
+        )
 
+    target_map = current_sim_state.target_maps.get(
+        target_specs.map_id if target_specs.map_id else ""
+    )
     if not target_map:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Associated map not found."
@@ -231,31 +237,22 @@ def clear_cache() -> GenericMessage:
 
 @app.put("/configure_pdf_parameters/")
 def configure_pdf_parameters(
-    hours_before_now: float = 48.0,
-    duration_hours: float = 24.0,
-    time_steps: int = 50,
-    downsample_step: int = 4,
+    new_sim_state: SimulationState,
+    current_sim_state: SimulationState = Depends(get_sim_state),
 ) -> GenericMessage:
     """
     Sets the global timing configuration for the simulation.
 
     Args:
-        hours_before_now (float): The number of hours
-            before the current time to start the simulation.
-        duration_hours (float): The total duration
-            of the simulation in hours.
-        time_steps (int): The resolution
-            of the time simulation.
-        downsample_step (int): The scaling
-            factor for matrix size.
+        new_sim_state (SimulationState): The new simulation state to configure.
+        current_sim_state (SimulationState): The current simulation state (injected).
     Returns:
-        GenericMessage: A success message payload
-            confirming configuration.
+        GenericMessage: A success message payload confirming configuration.
     """
 
-    app.state.start_time = datetime.now() - timedelta(hours=hours_before_now)
-    app.state.duration = timedelta(hours=duration_hours)
-    app.state.time_steps = time_steps
-    app.state.downsample_step = downsample_step
+    current_sim_state.start_time = new_sim_state.start_time
+    current_sim_state.duration = new_sim_state.duration
+    current_sim_state.time_steps = new_sim_state.time_steps
+    current_sim_state.downsample_step = new_sim_state.downsample_step
 
     return GenericMessage(message="PDF parameters configured.")
