@@ -294,6 +294,30 @@ class Target(SQLModel, table=True):
     loot_stddev: float | None = Field(default=None, ge=0)
 
 
+class DefaultTargets(SQLModel, table=True):
+    """
+    A helper model to store the default target specifications.
+
+    Attributes:
+        id (str): Unique UUID4 primary key for
+            the default target entry.
+        user_id (str): Foreign key linking the
+            default targets to a user session.
+        small_target_id (str): The ID of the predefined small
+            drone specification.
+        medium_target_id (str): The ID of the predefined medium
+            drone specification.
+        large_target_id (str): The ID of the predefined large
+            drone specification.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    user_id: str = Field(...)
+    small_target_id: str = Field(...)
+    medium_target_id: str = Field(...)
+    large_target_id: str = Field(...)
+
+
 class Map(SQLModel, table=True):
     """
     Defines spatial boundaries and zone traffic configurations.
@@ -340,6 +364,7 @@ def get_session() -> Generator[Session, None, None]:
     Yields:
         Generator: An active SQLModel db session instance.
     """
+
     engine = create_engine(
         os.getenv("DATABASE_URL", "sqlite:///stem.db"),
         connect_args={"check_same_thread": False},

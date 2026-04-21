@@ -90,6 +90,29 @@
   box-shadow: 0 0 10px var(--neon-green);
 }
 
+.tactical-selector {
+  background-color: var(--radar-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-left: 1rem;
+}
+
+.tactical-selector:hover {
+  border-color: var(--neon-green);
+  color: var(--neon-green);
+  box-shadow: 0 0 10px var(--neon-green);
+}
+
+.tactical-selector:focus {
+  border-color: var(--neon-green);
+  color: var(--neon-green);
+  box-shadow: 0 0 10px var(--neon-green);
+  outline: none;
+}
+
 /* --- ECharts Canvas Wrapper --- */
 .tactical-canvas-wrapper {
   aspect-ratio: '1/1';

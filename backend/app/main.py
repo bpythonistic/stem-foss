@@ -15,13 +15,22 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
 
+from app.features.target_mechanics import get_target_classes
 from app.features.target_pdf_helpers import clear_parquet_cache, save_map_state
 from app.features.target_pdf_helpers import router as target_pdf_router
-from app.schemas.pydmodels import GenericMessage, SimulationState, get_sim_state
+from app.schemas.pydmodels import (
+    GenericMessage,
+    DefaultTargetRequest,
+    SimulationState,
+    get_sim_state,
+    PDFParamState,
+    get_param_state,
+)
 from app.schemas.sqlmodels import (
     Map,
     SessionDep,
     Target,
+    DefaultTargets,
     User,
 )
 
@@ -149,14 +158,14 @@ def get_maps(session: SessionDep) -> list[Map]:
     return map_objs
 
 
-@app.post("/targets/", status_code=status.HTTP_201_CREATED)
+@app.post("/targets/custom/", status_code=status.HTTP_201_CREATED)
 def create_targets(
     target: Target,
     session: SessionDep,
     current_sim_state: SimulationState = Depends(get_sim_state),
 ) -> Target:
     """
-    Registers an enemy drone and triggers lane caching.
+    Registers a new target specification into the database.
 
     Args:
         target (Target): The target schema
@@ -184,6 +193,63 @@ def create_targets(
     current_sim_state.target_specs[target.id] = target
 
     return target
+
+
+@app.post("/targets/default/", status_code=status.HTTP_201_CREATED)
+def create_default_targets(
+    default_target_request: DefaultTargetRequest,
+    session: SessionDep,
+    current_sim_state: SimulationState = Depends(get_sim_state),
+) -> DefaultTargets:
+    """
+    Initializes and registers the 3 default
+        target specifications.
+
+    Args:
+        default_target_request (DefaultTargetRequest):
+            The request body containing user ID and map ID.
+        session (SessionDep):
+            The injected database session.
+        current_sim_state (SimulationState):
+            The current simulation state (injected).
+    Returns:
+        DefaultTargets:
+            The confirmed default targets with generated UUIDs.
+    """
+
+    user_id = default_target_request.user_id
+    map_id = default_target_request.map_id
+    default_target_specs = get_target_classes(user_id, map_id)
+
+    for target in default_target_specs:
+        session.add(target)
+    session.commit()
+    for target in default_target_specs:
+        session.refresh(target)
+
+    default_target_ids = [target.id for target in default_target_specs]
+    for target in default_target_specs:
+        query = select(Map).where(Map.id == target.map_id)
+        target_map = session.exec(query).first()
+        if not target_map:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Map not found"
+            )
+        if target_map.id not in current_sim_state.target_maps:
+            current_sim_state.target_maps[target_map.id] = target_map
+        current_sim_state.target_specs[target.id] = target
+
+    default_targets = DefaultTargets(
+        user_id=user_id,
+        small_target_id=default_target_ids[0],
+        medium_target_id=default_target_ids[1],
+        large_target_id=default_target_ids[2],
+    )
+    session.add(default_targets)
+    session.commit()
+    session.refresh(default_targets)
+
+    return default_targets
 
 
 @app.get("/targets/")
@@ -294,22 +360,22 @@ def clear_cache() -> GenericMessage:
 
 @app.put("/configure_pdf_parameters/")
 def configure_pdf_parameters(
-    new_sim_state: SimulationState,
-    current_sim_state: SimulationState = Depends(get_sim_state),
+    new_param_state: PDFParamState,
+    current_param_state: PDFParamState = Depends(get_param_state),
 ) -> GenericMessage:
     """
     Sets the global timing configuration for the simulation.
 
     Args:
-        new_sim_state (SimulationState): The new simulation state to configure.
-        current_sim_state (SimulationState): The current simulation state (injected).
+        new_param_state (PDFParamState): The new PDF parameter state to configure.
+        current_param_state (PDFParamState): The current PDF parameter state (injected).
     Returns:
         GenericMessage: A success message payload confirming configuration.
     """
 
-    current_sim_state.start_time = new_sim_state.start_time
-    current_sim_state.duration = new_sim_state.duration
-    current_sim_state.time_steps = new_sim_state.time_steps
-    current_sim_state.downsample_step = new_sim_state.downsample_step
+    current_param_state.start_time = new_param_state.start_time
+    current_param_state.duration_hours = new_param_state.duration_hours
+    current_param_state.time_steps = new_param_state.time_steps
+    current_param_state.downsample_step = new_param_state.downsample_step
 
     return GenericMessage(message="PDF parameters configured.")
