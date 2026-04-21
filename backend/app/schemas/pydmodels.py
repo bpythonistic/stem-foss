@@ -28,6 +28,25 @@ class GenericMessage(BaseModel):
     message: str = Field(..., description="A simple message string.")
 
 
+class DefaultTargetRequest(BaseModel):
+    """
+    A model for the request body when creating default targets.
+
+    Attributes:
+        user_id (str): The ID of the user for whom to create default targets.
+        map_id (str): The ID of the map for which to create default targets.
+    """
+
+    user_id: str = Field(
+        ...,
+        description="The ID of the user for whom to create default targets.",
+    )
+    map_id: str = Field(
+        ...,
+        description="The ID of the map for which to create default targets.",
+    )
+
+
 class SimulationState(BaseModel):
     """
     A model to represent the state of the simulation,
@@ -37,34 +56,55 @@ class SimulationState(BaseModel):
             A dictionary mapping map IDs to their corresponding map configurations.
         target_specs (dict[str, Target]):
             A dictionary mapping target IDs to their corresponding specifications.
-        start_time (datetime):
-            The starting time of the simulation.
-        duration (timedelta):
-            The total duration of the simulation.
-        time_steps (int):
-            The number of time steps in the simulation.
-        downsample_step (int):
-            The step size for downsampling data in the simulation.
     """
 
     target_maps: dict[str, Map]
     target_specs: dict[str, Target]
-    start_time: datetime
-    duration: timedelta
-    time_steps: int
-    downsample_step: int
+
+
+class PDFParamState(BaseModel):
+    """
+    A model to represent the parameters for configuring the PDF.
+
+    Attributes:
+        start_time (str): The starting time of the simulation.
+        duration_hours (float): The total duration of the simulation in hours.
+        time_steps (int): The number of time steps in the simulation.
+        downsample_step (int): The step size for downsampling data in the simulation.
+    """
+
+    start_time: str = Field(..., description="The starting time of the simulation.")
+    duration_hours: float = Field(
+        ..., description="The total duration of the simulation in hours.", gt=0
+    )
+    time_steps: int = Field(
+        ..., description="The number of time steps in the simulation.", ge=1
+    )
+    downsample_step: int = Field(
+        ...,
+        description="The step size for downsampling data in the simulation.",
+        ge=1,
+    )
 
 
 # Instantiate a global singleton
 sim_state = SimulationState(
     target_maps={},
     target_specs={},
-    start_time=datetime.now() - timedelta(hours=48),
-    duration=timedelta(hours=24),
-    time_steps=50,
-    downsample_step=4,
 )
 
 
 def get_sim_state() -> SimulationState:
     return sim_state
+
+
+param_state = PDFParamState(
+    start_time=(datetime.now() - timedelta(hours=48)).isoformat(),
+    duration_hours=24.0,
+    time_steps=50,
+    downsample_step=4,
+)
+
+
+def get_param_state() -> PDFParamState:
+    return param_state

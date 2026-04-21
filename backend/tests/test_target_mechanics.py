@@ -24,7 +24,7 @@ class TargetSpecsData(BaseModel):
     """
 
     specs: list[sql_schemas.Target] = Field(
-        default_factory=lambda: list(tm.get_target_classes("01"))
+        default_factory=lambda: list(tm.get_target_classes("01", "map_01"))
     )
 
 
@@ -101,6 +101,7 @@ def database_setup_fixture(
                 session.commit()
                 session.refresh(target)
             target_map = sql_schemas.Map(
+                id="map_01",
                 user_id="01",
                 name="Test Map",
                 description="A test map for target mechanics tests.",

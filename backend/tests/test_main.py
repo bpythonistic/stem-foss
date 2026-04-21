@@ -156,7 +156,9 @@ class DataForTests:
         ),
     )
 
-    TARGET_DATA: tuple[sch.Target, sch.Target, sch.Target] = get_target_classes("01")
+    TARGET_DATA: tuple[sch.Target, sch.Target, sch.Target] = get_target_classes(
+        "01", "map01"
+    )
 
     @classmethod
     def get_target_model(cls, target_size: sch.TargetClass) -> TargetPair:
@@ -251,7 +253,7 @@ def database_setup(client: TestClient, request: pytest.FixtureRequest) -> DataMo
     def add_targets(targets_arg: list[TargetPair]):
         for target in targets_arg:
             response = client.post(
-                "/targets/",
+                "/targets/custom",
                 json=json.loads(target.input_data.model_dump_json()),
             )
             assert response.status_code == target.expected_output[0]
@@ -275,7 +277,7 @@ class TestEndpoints:
     - POST /users
     - GET /users/{user_id}
     - POST /maps
-    - POST /targets
+    - POST /targets/custom
     - POST /pdf-parameters
     """
 

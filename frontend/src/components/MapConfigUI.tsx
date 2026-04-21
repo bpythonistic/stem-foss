@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import './MapConfigUI.css';
 
+import { updatePdfParameters } from '../app/Api';
+
 interface MapConfigUIProps {
   onConfigChange: () => void;
 }
@@ -12,18 +14,16 @@ const MapConfigUI: React.FC<MapConfigUIProps> = ({ onConfigChange }) => {
   const [downsampleStep, setDownsampleStep] = useState<number>(4);
 
   const handleUpdateConfig = () => {
-    // fetch('/configure_pdf_parameters/', {
-    //   method: 'PUT',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     hours_before_now: hoursBeforeNow,
-    //     duration_hours: durationHours,
-    //     time_steps: timeSteps,
-    //     downsample_step: downsampleStep,
-    //   }),
-    // });
+    const now = new Date();
+    const startTime = new Date(now.getTime() + hoursBeforeNow * 60 * 60 * 1000);
+    updatePdfParameters({
+      start_time: startTime.toISOString(),
+      duration_hours: durationHours,
+      time_steps: timeSteps,
+      downsample_step: downsampleStep,
+    }).catch((error) => {
+      console.error('Error updating PDF parameters:', error);
+    });
     onConfigChange();
   };
 

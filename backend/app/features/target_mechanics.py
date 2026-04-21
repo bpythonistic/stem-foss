@@ -22,13 +22,15 @@ from app.schemas.sqlmodels import LootDist, Map, Target, TargetClass
 npr.seed(42)  # Set a fixed seed for reproducibility
 
 
-def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
+def get_target_classes(user_id: str, map_id: str) -> tuple[Target, Target, Target]:
     """
     Retrieves the base hardware specifications for target tiers.
 
     Args:
         user_id (str): The unique identifier
             of the active player.
+        map_id (str): The unique identifier
+            of the map.
     Returns:
         tuple: The small, medium, and large
             target configurations.
@@ -36,7 +38,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
     return (
         Target(
             user_id=user_id,
-            map_id=None,  # To be assigned when linked to a map
+            map_id=map_id,
             name="Small Target",
             description="A small target with high agility.",
             category=TargetClass.SMALL,
@@ -52,7 +54,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
         ),
         Target(
             user_id=user_id,
-            map_id=None,  # To be assigned when linked to a map
+            map_id=map_id,
             name="Medium Target",
             description="A medium target with balanced stats.",
             category=TargetClass.MEDIUM,
@@ -68,7 +70,7 @@ def get_target_classes(user_id: str) -> tuple[Target, Target, Target]:
         ),
         Target(
             user_id=user_id,
-            map_id=None,  # To be assigned when linked to a map
+            map_id=map_id,
             name="Large Target",
             description="A large target with low agility.",
             category=TargetClass.LARGE,
@@ -155,16 +157,21 @@ def describe_lanes(
     max_stddev = (
         stddev_factor * (target_specs.top_speed * target_specs.accel_max) ** 0.5
     )
+    traffic_density_scalar = pl.Series(
+        "traffic_density", npr.uniform(0, 1, target_map.num_heat_points)
+    )
+    traffic_stddev = pl.Series(
+        "traffic_stddev",
+        npr.uniform(0.1 * max_stddev, max_stddev, target_map.num_heat_points),
+    )
     return heat_points.with_columns(
         x_start=pl.col("x"),
         y_start=pl.col("y"),
         x_end=pl.col("x").shift(-1).fill_null(pl.col("x").first()),
         y_end=pl.col("y").shift(-1).fill_null(pl.col("y").first()),
-        traffic_density=pl.lit(npr.uniform(0, 1, target_map.num_heat_points))
+        traffic_density=traffic_density_scalar
         * (total_targets / target_map.num_heat_points),  # Random traffic density
-        traffic_stddev=pl.lit(
-            npr.uniform(0.1 * max_stddev, max_stddev, target_map.num_heat_points)
-        ),  # Random traffic variability
+        traffic_stddev=traffic_stddev,  # Random traffic variability
     )
 
 
@@ -223,10 +230,10 @@ def map_lane_traffic(
             q2.with_columns(
                 (
                     lane["traffic_density"]
-                    * np.exp(
+                    * (
                         -0.5
                         * (pl.col("dist_to_lane") ** 2 / lane["traffic_stddev"] ** 2)
-                    )
+                    ).exp()
                 ).alias("traffic")
             )
             .select(pl.col("x"), pl.col("y"), pl.col("traffic"))
@@ -261,11 +268,14 @@ def calculate_temporal_lane_traffic(
         "time",
         pl.linear_space(start_time, start_time + duration, time_steps, eager=True),
     )
-    num_rush_hours = npr.randint(1, 4, size=lanes.collect().shape[0])
+    num_rush_hours = pl.Series(
+        "num_rush_hours", npr.randint(1, 4, size=lanes.collect().shape[0])
+    )
     for i, lane in enumerate(lanes.collect().iter_rows(named=True)):
         rush_hours = pl.Series(
-            time_series.sample(num_rush_hours[i], with_replacement=False),
-        )
+            "rush_hours",
+            time_series.sample(num_rush_hours[i], with_replacement=False).sort(),
+        ).to_list()
         traffic_patterns = [
             pl.DataFrame(
                 {
@@ -275,17 +285,17 @@ def calculate_temporal_lane_traffic(
                         + lane["traffic_density"]
                         * (npr.rand() + 1)
                         * 5
-                        * np.exp(
+                        * (
                             -0.5
                             * (
-                                rush_hour
+                                (rush_hour - start_time).total_seconds()
                                 - time_series.map_elements(
                                     lambda x: (x - start_time).total_seconds()
                                 )
                             )
                             ** 2
                             / (60 * 60) ** 2
-                        )
+                        ).exp()
                     ),
                 }
             ).lazy()
@@ -341,17 +351,15 @@ def evaluate_total_pdf(
             map_lane_traffic(target_map, lanes),
             calculate_temporal_lane_traffic(lanes, start_time, duration, time_steps),
         ):
-            current_traffic = (
-                temporal_traffic.select(
-                    pl.col("total_traffic").alias("current_traffic"),
-                    pl.when(pl.col("time") > current_time)
-                    .then(pl.col("total_traffic"))
-                    .otherwise(pl.lit(None)),
-                )
-                .select(pl.col("current_traffic").first(ignore_nulls=True))
+            current_traffic_df = (
+                temporal_traffic.filter(pl.col("time") >= current_time)
+                .select("total_traffic")
+                .head(1)
                 .collect()
-            ).item(0, 0)
-            if current_traffic is None:
+            )
+            if current_traffic_df.height > 0:
+                current_traffic = current_traffic_df.item(0, 0)
+            else:
                 current_traffic = 0.0
             yield (
                 lane_traffic.select(

@@ -6,14 +6,7 @@ platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
-init-db = "(cd ./postgresql/base) || mkdir -p ./postgresql && initdb -D ./postgresql"
-check-db-server = "psql -U postgres -d stem_db -c 'CREATE TABLE Test (id INT PRIMARY KEY);DROP TABLE Test' > /dev/null"
-start-db-server = "(pixi run check-db-server) || pg_ctl start -D ./postgresql -o '-h localhost -p 5432' -l ./postgresql/logfile"
-stop-db-server = "(pixi run check-db-server) || pg_ctl stop -D ./postgresql"
-create-db = { cmd = "createuser postgres && createdb --owner postgres stem_db", depends-on = [
-    "init-db",
-    "start-db-server",
-] }
+backend = "cd backend && uvicorn app.main:app --reload --env-file app/.env"
 update-nodejs = "npm install --save-dev"
 compile-ts = "tsc"
 watch-ts = "tsc -w"
@@ -33,13 +26,12 @@ nodejs = "24.14.*"
 numpy = ">=2.4.2,<3"
 python-dotenv = ">=1.2.2,<2"
 sqlmodel = ">=0.0.37,<0.0.38"
-psycopg = ">=3.3.3,<4"
-postgresql = "*"
 ruff = "*"
 pre-commit = "*"
 uvicorn = "*"
 polars = ">=1.38.1,<2"
 npx = ">=0.1.1,<0.2"
+sqlite = ">=3.53.0,<4"
 
 [feature.py311.dependencies]
 python = "3.11.*"
@@ -54,7 +46,6 @@ python = "3.13.*"
 python = "3.14.*"
 
 [feature.test.dependencies]
-sqlite = "*"
 pytest = "*"
 pytest-cov = "*"
 

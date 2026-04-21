@@ -20,7 +20,12 @@ from app.features.target_mechanics import (
     evaluate_total_pdf,
     generate_map_heat_points,
 )
-from app.schemas.pydmodels import SimulationState, get_sim_state
+from app.schemas.pydmodels import (
+    PDFParamState,
+    SimulationState,
+    get_param_state,
+    get_sim_state,
+)
 from app.schemas.sqlmodels import Map as TargetMap
 from app.schemas.sqlmodels import Target
 
@@ -76,7 +81,7 @@ def clear_parquet_cache(parquet_path: Path | None = None) -> None:
             print(f"Error deleting file {file}: {e}")
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=65536)
 def get_echarts_payload(
     target_map_str: str,
     target_specs_id: str,
@@ -122,64 +127,65 @@ def get_echarts_payload(
         target_map, lanes, target_time, duration, time_steps
     )
     pdf_df = pdf_at_time(target_time).collect()
-    samples = target_map.samples
+    x_axes = pdf_df.select("x").to_series().unique().sort()
+    y_axes = pdf_df.select("y").to_series().unique().sort()
 
-    # 2. Post-process the Polars DataFrame: filter, round, and add indices
-    pdf_df = (
-        pdf_df.select("x", "y", "total_pdf")
-        .with_columns(
-            x_index=pl.arange(0, samples, dtype=pl.Int32),
-            y_index=pl.arange(0, samples, dtype=pl.Int32),
-        )
-        .with_columns(
-            total_pdf=pl.when(pl.col("total_pdf") < 0.001)
-            .then(None)
-            .otherwise(pl.col("total_pdf").round(4))
-        )
-        .drop_nulls(subset=["total_pdf"])
+    # 3. Downsample the axes directly
+    x_downsampled = pl.Series(x_axes[::downsample_step])
+    y_downsampled = pl.Series(y_axes[::downsample_step])
+
+    # 4. Filter dataframe to only keep downsampled coordinates & valid data
+    pdf_df = pdf_df.filter(
+        pl.col("x").is_in(x_downsampled),
+        pl.col("y").is_in(y_downsampled),
+        pl.col("total_pdf").is_not_null(),
+        pl.col("total_pdf").is_not_nan(),
+        pl.col("total_pdf").is_finite(),
     )
 
-    # 3. Downsample the grid for performance (e.g., from 100x100 to 25x25)
-    pdf_df = pdf_df.with_columns(
-        x_down=pl.when(pl.col("x_index") // downsample_step == 0)
-        .then(None)
-        .otherwise(pl.col("x_index") // downsample_step),
-        y_down=pl.when(pl.col("y_index") // downsample_step == 0)
-        .then(None)
-        .otherwise(pl.col("y_index") // downsample_step),
-    ).drop_nulls(subset=["x_down", "y_down"])
+    # 5. Map the spatial coordinates to their new ECharts array indices
+    x_map_df = pl.DataFrame({"x": x_downsampled}).with_row_index("x_index")
+    y_map_df = pl.DataFrame({"y": y_downsampled}).with_row_index("y_index")
 
-    # 4. Format exactly as ECharts expects: [x_index, y_index, value]
-    echarts_data = (
-        pdf_df.select(
-            pl.col("x_index").unique().sort().cast(pl.Int32),
-            pl.col("y_index").unique().sort().cast(pl.Int32),
-            pl.col("total_pdf"),
-        )
-        .to_numpy()
-        .tolist()
+    pdf_df = pdf_df.join(x_map_df, on="x", how="inner").join(
+        y_map_df, on="y", how="inner"
     )
 
-    # 5. Serialize the entire payload as a JSON string and cache it.
-    # This avoids Pydantic parsing overhead on the FastAPI side.
-    return json.dumps(
+    # 6. Format exactly as ECharts expects: [x_index, y_index, value]
+    echarts_data = sorted(
+        [
+            [row["x_index"], row["y_index"], row["total_pdf"]]
+            for row in pdf_df.select(
+                pl.col("x_index").cast(pl.Int32),
+                pl.col("y_index").cast(pl.Int32),
+                pl.col("total_pdf").round(4),
+            ).to_dicts()
+        ],
+        key=lambda item: (item[0], item[1]),
+    )
+
+    # 7. Safely calculate max_val to prevent `NaN` JSON SyntaxErrors
+    safe_max_val = float(
+        pdf_df.select(pl.col("total_pdf").max()).to_series().to_list()[0]
+    )
+
+    json_payload = json.dumps(
         {
-            "x": pdf_df.select(pl.col("x_index")).to_series().to_list(),
-            "y": pdf_df.select(pl.col("y_index")).to_series().to_list(),
+            "x": x_downsampled.round(4).to_list(),
+            "y": y_downsampled.round(4).to_list(),
             "data": echarts_data,
-            "max_val": pdf_df.select(pl.col("total_pdf"))
-            .max()
-            .to_series()
-            .to_list()[0],
-        },
+            "max_val": safe_max_val,
+        }
     )
+    return json_payload
 
 
-@router.websocket("/ws/tactical-map/{target_id}")
+@router.websocket("/ws/tactical_map/{target_id}")
 async def tactical_map_stream(
     websocket: WebSocket,
     target_id: str,
-    state: SimulationState = Depends(get_sim_state),
+    sim_state: SimulationState = Depends(get_sim_state),
+    param_state: PDFParamState = Depends(get_param_state),
 ):
     """
     Manages the WebSocket connection for real-time map updates.
@@ -197,14 +203,14 @@ async def tactical_map_stream(
 
     # State pointer for the latest time requested by the client
     latest_requested_time = None
-    current_target_specs = state.target_specs.get(target_id)
+    current_target_specs = sim_state.target_specs.get(target_id)
     if not current_target_specs:
         await websocket.send_text(
             json.dumps({"error": "Target specifications not found."})
         )
         await websocket.close()
         return
-    current_map_obj = state.target_maps.get(
+    current_map_obj = sim_state.target_maps.get(
         current_target_specs.map_id if current_target_specs.map_id else ""
     )
     if not current_map_obj:
@@ -214,10 +220,10 @@ async def tactical_map_stream(
         await websocket.close()
         return
     target_map_str: str = current_map_obj.model_dump_json()
-    start_time: datetime = state.start_time
-    time_duration: timedelta = state.duration
-    time_steps: int = state.time_steps
-    downsample_step: int = state.downsample_step
+    start_time: str = param_state.start_time
+    time_duration: timedelta = timedelta(hours=param_state.duration_hours)
+    time_steps: int = param_state.time_steps
+    downsample_step: int = param_state.downsample_step
 
     async def process_and_send():
         """
@@ -271,7 +277,7 @@ async def tactical_map_stream(
             if "rel_seconds" in message:
                 # Update the pointer. We don't await the math here;
                 # we just let the background task pick it up on its next loop.
-                latest_requested_time = start_time + timedelta(
+                latest_requested_time = datetime.fromisoformat(start_time) + timedelta(
                     seconds=message["rel_seconds"]
                 )
 

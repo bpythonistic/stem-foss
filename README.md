@@ -38,14 +38,14 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 #### Phase I: The Core Physics & UI Loop
 
 - [x] **Backend Math Engine**: Implement the spatial parametric curves and temporal modulation in Python/Polars to generate dynamic PDFs.
-- [ ] **Data Streaming API**: Create a FastAPI WebSocket endpoint to evaluate the total PDF on-demand, downsample the matrix, and stream JSON payloads to the client.
+- [x] **Data Streaming API**: Create a FastAPI WebSocket endpoint to evaluate the total PDF on-demand, downsample the matrix, and stream JSON payloads to the client.
 - [ ] **Frontend Canvas Integration**: Configure an Apache ECharts canvas to render the incoming downsampled PDF matrix as a high-performance heatmap.
 - [ ] **Time-Scrubbing UI**: Build the interactive timeline slider in React to allow users to observe PDF shifts over a 24-hour simulation cycle.
 - [ ] **Basic Interception Logic**: Create the FastAPI endpoint to validate a "Drop Net" event based on target coordinates, net radius, and time of impact.
 
 #### Phase II: RPG Mechanics & Persistence
 
-- [ ] **Database Initialization**: Spin up PostgreSQL with SQLModel for the Users, Stats, and Targets schemas.
+- [ ] **Database Refinement**: Spin up SQLite with SQLModel for the Users, Stats, and Targets schemas.
 - [ ] **Loot Distribution System**: Implement the NumPy/SciPy logic to generate randomized loot drops based on the target's specific Gaussian distribution parameters.
 - [ ] **Loadout Management**: Build the frontend UI forms for players to view their Traits, spend loot on Upgrades, and see how it modifies their base interception stats.
 - [ ] **Target Tiering**: Introduce Small, Medium, and Large target classes with varying speed and acceleration profiles, requiring different predictive strategies.
@@ -64,7 +64,7 @@ To learn Probability Density Functions (PDFs) through analysis of randomized dro
 2. Evaluate the combined spatiotemporal PDF across the coordinate grid.
 3. Downsample the resulting matrix and format it as a lightweight JSON payload.
 4. Stream the data to the frontend via a WebSocket connection.
-5. Interact with the PostgreSQL database to save/fetch the user's traits, stats, upgrades, etc.
+5. Interact with the SQLite database to save/fetch the user's traits, stats, upgrades, etc.
 6. Provide standard REST API endpoints for user and game state management.
 
 ### Frontend Prototype
@@ -92,7 +92,7 @@ See [sqlmodels.py](backend/app/schemas/sqlmodels.py) for up-to-date schemas.
 - **Dev API Server:** `uvicorn`
 - **Math Kernel:** `NumPy` / `SciPy` (for generating and analyzing semi-random drone behavior)
 - **Data Manipulation:** `Polars`
-- **Database:** `PostgreSQL`
+- **Database:** `SQLite`
 - **ORM:** `SQLAlchemy` / `SQLModel`
 - **Unit tests:** `pytest`
 - **Package Manager:** [Pixi](https://pixi.prefix.dev/latest/)
@@ -127,7 +127,7 @@ See [sqlmodels.py](backend/app/schemas/sqlmodels.py) for up-to-date schemas.
 
 ### Backend Setup
 
-```bash
+```shell
 # Clone the repository
 git clone https://github.com/bpythonistic/stem-foss.git
 cd stem-foss
@@ -136,7 +136,7 @@ cd stem-foss
 pixi install
 
 # Create .env file
-cp back-end/app/.env.example back-end/app/.env
+cp backend/app/.env.example backend/app/.env
 ```
 
 The API will be available at [http://localhost:8000](http://localhost:8000).
@@ -147,7 +147,7 @@ You can view the interactive docs at [http://localhost:8000/docs](http://localho
 
 Once the API server is running, open a new terminal before proceeding.
 
-```bash
+```shell
 # Install dependencies
 pixi run update-nodejs
 # Launch Web UI
@@ -156,17 +156,18 @@ pixi run frontend
 
 The game client will be available at [http://localhost:5173](http://localhost:5173)
 
-### Database Setup (not yet implemented)
+### Launch Development Application
 
-Ensure PostgreSQL is not already globally installed and running before proceeding.
-
-```bash
-pixi run create-db
+```shell
+# Run the API server
+pixi run backend
+# Start the development client
+pixi run frontend
 ```
 
 ### Backend Unit Tests
 
-```bash
+```shell
 # Run backend unit tests (pytest)
 pixi run test-all
 ```

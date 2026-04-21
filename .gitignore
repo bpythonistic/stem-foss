@@ -5,7 +5,7 @@ dist/
 !.env.example
 .vscode
 *.parquet
-postgresql/
+*.db
 .coverage
 *.db# pixi environments
 .pixi/*
