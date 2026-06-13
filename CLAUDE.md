@@ -31,6 +31,7 @@ pixi run pre-commit
 The Swagger UI for interactive API testing is at http://localhost:8000/docs.
 
 Backend `pytest` tests use an in-memory SQLite database (never the dev database). To run a single test file:
+
 ```shell
 pixi run -e test-py314 -- pytest backend/tests/test_target_mechanics.py -v
 ```
@@ -46,6 +47,7 @@ The backend is a FastAPI application with two distinct layers:
 **WebSocket endpoint** (`app/features/target_pdf_helpers.py`): `/ws/tactical_map/{target_id}` streams ECharts-formatted JSON payloads. When the frontend sends `{ rel_seconds: N }`, the server evaluates the PDF at that time offset and sends back `{ x, y, data, max_val }`. CPU-bound PDF math runs in `asyncio.to_thread` to avoid blocking the event loop. Results are memoized with `lru_cache`.
 
 **Physics engine** (`app/features/target_mechanics.py`): Pure NumPy/Polars math with no I/O. The PDF pipeline:
+
 1. `generate_map_heat_points` — random anchor nodes on the map grid
 2. `describe_lanes` — parametric routes between nodes, with per-target-class variance
 3. `map_lane_traffic` — Gaussian spread around each lane (spatial PDF component)
@@ -55,6 +57,7 @@ The backend is a FastAPI application with two distinct layers:
 Lane configurations are saved to Parquet files under `backend/app/data/parquet_cache/` via `save_map_state`. The WebSocket reads these files on each frame request.
 
 **Schemas** (`app/schemas/`):
+
 - `sqlmodels.py` — SQLModel ORM models (User, Map, Target, RPGClass, Trait, Stats, Upgrade, DefaultTargets) + `get_session` dependency that creates SQLite tables on first call
 - `pydmodels.py` — Pydantic models for API I/O + two global in-memory singletons (`SimulationState`, `PDFParamState`) injected via FastAPI `Depends`
 

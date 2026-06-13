@@ -141,9 +141,7 @@ def _precompute_frames(
     for step_idx in range(time_steps):
         # Distribute steps evenly across [0, total_seconds]
         rel_secs = (
-            round(total_seconds * step_idx / (time_steps - 1))
-            if time_steps > 1
-            else 0
+            round(total_seconds * step_idx / (time_steps - 1)) if time_steps > 1 else 0
         )
         target_time = start_dt + timedelta(seconds=rel_secs)
         frames[rel_secs] = get_echarts_payload(
@@ -249,7 +247,9 @@ def get_echarts_payload(
 
     # 3. Transform to P(at least one target within the intercept radius)
     grid_spacing = float(target_map.map_size) / (target_map.samples - 1)
-    matrix = _at_least_one_probability(matrix, grid_spacing, _INTERCEPT_RADIUS, num_targets)
+    matrix = _at_least_one_probability(
+        matrix, grid_spacing, _INTERCEPT_RADIUS, num_targets
+    )
 
     # 4. Downsample by direct matrix slicing
     prob_ds = matrix[::downsample_step, ::downsample_step]
