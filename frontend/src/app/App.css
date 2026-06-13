@@ -41,8 +41,9 @@
   flex: 1; /* Allows the map container to fill the remaining horizontal space */
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch; /* Let the map container fill the full column width */
   justify-content: flex-start;
+  min-width: 0; /* Prevent flex blowout on narrow viewports */
 }
 
 /* --- Responsive Fallback --- */

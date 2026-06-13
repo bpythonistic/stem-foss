@@ -9,8 +9,8 @@
     0 0 20px rgba(0, 0, 0, 0.8),
     inset 0 0 10px var(--border-color);
   border: 1px solid var(--border-color);
-  max-width: 600px;
-  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* --- Typography --- */
@@ -21,73 +21,6 @@
   margin-bottom: 0.5rem;
   text-shadow: 0 0 8px var(--neon-green-glow);
   text-align: center;
-}
-
-.tactical-time-display {
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: var(--neon-blue);
-  background: rgba(59, 130, 246, 0.1);
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  margin-bottom: 1.5rem;
-  letter-spacing: 0.1em;
-}
-
-/* --- Custom Timeline Slider --- */
-.tactical-slider-wrapper {
-  width: 80%;
-  margin: 1rem 0;
-  display: flex;
-  align-items: center;
-}
-
-.tactical-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 6px;
-  background: var(--border-color);
-  border-radius: 3px;
-  outline: none;
-  transition: all 0.2s ease-in-out;
-}
-
-/* The Slider Track */
-.tactical-slider::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 6px;
-  cursor: crosshair;
-  background: var(--border-color);
-  border-radius: 3px;
-}
-
-/* The Slider Thumb (The Scrubber) */
-.tactical-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--neon-green);
-  cursor: pointer;
-  margin-top: -6px; /* Centers the thumb on the track */
-  box-shadow: 0 0 10px var(--neon-green);
-  transition: transform 0.1s;
-}
-
-.tactical-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-}
-
-.tactical-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--neon-green);
-  cursor: pointer;
-  box-shadow: 0 0 10px var(--neon-green);
 }
 
 .tactical-selector {
@@ -115,9 +48,10 @@
 
 /* --- ECharts Canvas Wrapper --- */
 .tactical-canvas-wrapper {
-  aspect-ratio: '1/1';
-  min-width: 600px;
-  min-height: 600px;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  /* Prevent the square from ever being taller than the viewport */
+  max-height: 75vh;
   background-color: var(--radar-panel);
   border: 2px solid var(--border-color);
   border-radius: 8px;
@@ -149,6 +83,44 @@
   color: var(--text-muted);
   font-style: italic;
   animation: pulse 1.5s infinite;
+}
+
+.tactical-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  z-index: 11;
+}
+
+.tactical-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(0, 255, 65, 0.15);
+  border-top-color: var(--neon-green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  box-shadow: 0 0 12px var(--neon-green-glow);
+}
+
+.tactical-loading-text {
+  color: var(--text-muted);
+  font-style: italic;
+  letter-spacing: 0.05em;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {

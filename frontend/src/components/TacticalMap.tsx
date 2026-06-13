@@ -23,9 +23,34 @@ interface EChartsPayload {
 
 interface TacticalMapProps {
   configVersion: number;
+  selectedTargetClass: TargetClass;
+  relSeconds: number;
 }
 
-const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
+/** Returns the set of axis indices that are closest to each multiple of `step`. */
+const tickIndices = (values: number[], step = 10): Set<number> => {
+  const result = new Set<number>();
+  const max = Math.ceil(Math.max(...values) / step) * step;
+  for (let m = Math.floor(Math.min(...values) / step) * step; m <= max; m += step) {
+    let best = 0;
+    let bestDist = Infinity;
+    values.forEach((v, i) => {
+      const d = Math.abs(v - m);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    });
+    result.add(best);
+  }
+  return result;
+};
+
+const TacticalMap: React.FC<TacticalMapProps> = ({
+  configVersion,
+  selectedTargetClass,
+  relSeconds,
+}) => {
   const [payload, setPayload] = useState<EChartsPayload | null>(null);
   const [userName] = useState<string>('DefaultUser');
   const [userId, setUserId] = useState<string | null>(null);
@@ -34,46 +59,36 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
   const [mediumTargetId, setMediumTargetId] = useState<string | null>(null);
   const [largeTargetId, setLargeTargetId] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string | null>(null);
-  const [selectedTargetClass, setSelectedTargetClass] = useState<TargetClass>(
-    TargetClass.Small,
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadingMessage, setLoadingMessage] = useState<string>(
+    'Initializing sensor array...',
   );
-  const [relSeconds, setRelSeconds] = useState<number | null>(null);
-  const [timeRange] = useState<{
-    min: number;
-    max: number;
-    step: number;
-  }>({
-    min: 0,
-    max: 86100,
-    step: 300,
-  });
+  const [wsVersion, setWsVersion] = useState<number>(0);
   const [options, setOptions] = useState<EChartsOption>({});
   const websocketRef = useRef<WebSocket | null>(null);
 
-  const handleTargetClass = (newClass: TargetClass) => {
-    if (userId && mapId && smallTargetId && mediumTargetId && largeTargetId) {
-      setSelectedTargetClass(newClass);
-      switch (newClass) {
-        case TargetClass.Small:
-          setTargetId(smallTargetId);
-          break;
-        case TargetClass.Medium:
-          setTargetId(mediumTargetId);
-          break;
-        case TargetClass.Large:
-          setTargetId(largeTargetId);
-          break;
-        default:
-          break;
-      }
+  // When the user picks a different target class from the sidebar, switch targets.
+  useEffect(() => {
+    if (!smallTargetId || !mediumTargetId || !largeTargetId) return;
+    setIsLoading(true);
+    setLoadingMessage('Recalibrating sensors...');
+    switch (selectedTargetClass) {
+      case TargetClass.Small:
+        setTargetId(smallTargetId);
+        break;
+      case TargetClass.Medium:
+        setTargetId(mediumTargetId);
+        break;
+      case TargetClass.Large:
+        setTargetId(largeTargetId);
+        break;
     }
-  };
+  }, [selectedTargetClass]);
 
   useEffect(() => {
-    // Initialize user, map, and target on component mount
-    // This will be handled in a separate UI later
-    // For now, we can just create a default user and map if they don't exist
     const initializeData = async () => {
+      setIsLoading(true);
+      setLoadingMessage('Initializing sensor array...');
       if (!userId) {
         const existingUser = await fetchUser(userName).catch(() => null);
         if (existingUser && existingUser.id) {
@@ -156,6 +171,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
         });
       }
       setTargetId(selectedTargetId);
+      setWsVersion((v) => v + 1);
     };
     initializeData().catch((error) => {
       console.error('Error initializing data:', error);
@@ -166,41 +182,35 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
     let isMounted = true;
 
     const setupNewTargetConnection = async () => {
-      if (!targetId) {
-        return;
-      }
+      if (!targetId) return;
       try {
         await saveTargetState(targetId, true);
       } catch (error) {
         console.error('Error saving target state on backend:', error);
-        return; // Abort if the backend fails to prep the files
+        return;
       }
 
       if (!isMounted) return;
 
-      // 2. Close the old connection
       if (websocketRef.current) {
         websocketRef.current.close();
       }
 
-      // 3. Open the new connection
       websocketRef.current = renderTacticalMapWebSocket(
         targetId,
         (raw_data) => {
           const data: EChartsPayload = raw_data ? JSON.parse(raw_data) : null;
           setPayload(data);
+          setIsLoading(false);
         },
         (error) => {
           console.error('WebSocket error:', error);
         },
       );
 
-      // 4. Jumpstart the stream (Check if OPEN, otherwise wait for it)
-      // Since the socket is asynchronous, we need to wait a tiny bit for it to open
-      // before sending the current slider time.
       const jumpstartStream = () => {
         if (websocketRef.current?.readyState === WebSocket.OPEN) {
-          websocketRef.current.send(JSON.stringify({ rel_seconds: relSeconds ?? 0 }));
+          websocketRef.current.send(JSON.stringify({ rel_seconds: relSeconds }));
         } else {
           setTimeout(jumpstartStream, 50);
         }
@@ -212,7 +222,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
       isMounted = false;
       websocketRef.current?.close();
     };
-  }, [targetId]);
+  }, [targetId, wsVersion]);
 
   useEffect(() => {
     websocketRef.current?.send(JSON.stringify({ rel_seconds: relSeconds }));
@@ -220,25 +230,55 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
 
   useEffect(() => {
     if (payload) {
-      console.log('Updating chart options with new payload');
       const newOptions: EChartsOption = {
         title: {
           text: 'Tactical Map',
         },
         tooltip: {
-          trigger: 'axis',
+          trigger: 'item',
+          formatter: (params: unknown) => {
+            const p = params as { value: [number, number, number] };
+            if (!p.value || p.value[2] === 0) return '';
+            return `P(intercept): ${(p.value[2] * 100).toFixed(2)}%`;
+          },
         },
-        xAxis: {
-          type: 'category',
-          data: payload ? payload.x : [],
-        },
-        yAxis: {
-          type: 'category',
-          data: payload ? payload.y : [],
-        },
+        xAxis: (() => {
+          const xt = tickIndices(payload.x);
+          return {
+            type: 'category' as const,
+            data: payload.x,
+            axisLabel: {
+              interval: (i: number) => xt.has(i),
+              formatter: (v: string) => String(Math.round(parseFloat(v) / 10) * 10),
+            },
+            axisTick: { interval: (i: number) => xt.has(i) },
+            splitLine: {
+              show: true,
+              interval: (i: number) => xt.has(i),
+              lineStyle: { color: 'rgba(255,255,255,0.07)' },
+            },
+          };
+        })(),
+        yAxis: (() => {
+          const yt = tickIndices(payload.y);
+          return {
+            type: 'category' as const,
+            data: payload.y,
+            axisLabel: {
+              interval: (i: number) => yt.has(i),
+              formatter: (v: string) => String(Math.round(parseFloat(v) / 10) * 10),
+            },
+            axisTick: { interval: (i: number) => yt.has(i) },
+            splitLine: {
+              show: true,
+              interval: (i: number) => yt.has(i),
+              lineStyle: { color: 'rgba(255,255,255,0.07)' },
+            },
+          };
+        })(),
         visualMap: {
           min: 0,
-          max: payload ? payload.max_val : 1,
+          max: payload.max_val,
           calculable: true,
           realtime: false,
           inRange: {
@@ -261,14 +301,14 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
           {
             name: 'Tactical Map',
             type: 'heatmap',
-            data: payload ? payload.data : [],
+            data: payload.data,
             emphasis: {
               itemStyle: {
                 borderColor: '#333',
                 borderWidth: 1,
               },
             },
-            progressive: 1000,
+            progressive: 0,
             animation: false,
           },
         ],
@@ -283,44 +323,8 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
     <div className="tactical-map-container">
       <h2 className="tactical-title">Target Prediction Heatmap for Project Netfall</h2>
 
-      <div className="target-class-selector">
-        <label htmlFor="target-class-select">Select Target Class: </label>
-        <select
-          id="target-class-select"
-          value={selectedTargetClass}
-          onChange={(e) => handleTargetClass(e.target.value as TargetClass)}
-        >
-          <option value={TargetClass.Small}>Small</option>
-          <option value={TargetClass.Medium}>Medium</option>
-          <option value={TargetClass.Large}>Large</option>
-        </select>
-      </div>
-
-      <div className="tactical-slider-wrapper">
-        <input
-          type="range"
-          className="tactical-slider"
-          min={timeRange.min}
-          max={timeRange.max}
-          step={timeRange.step}
-          value={relSeconds ?? 0}
-          onChange={(e) => setRelSeconds(parseInt(e.target.value))}
-        />
-      </div>
-
-      <p className="tactical-time-display">
-        T+{' '}
-        {Math.floor(relSeconds ? relSeconds / 3600 : 0)
-          .toString()
-          .padStart(2, '0')}
-        :
-        {Math.floor((relSeconds ? relSeconds % 3600 : 0) / 60)
-          .toString()
-          .padStart(2, '0')}
-      </p>
-
       <div className="tactical-canvas-wrapper">
-        {payload ? (
+        {payload && (
           <EChartsReact
             option={options}
             style={{ height: '100%', width: '100%' }}
@@ -328,9 +332,16 @@ const TacticalMap: React.FC<TacticalMapProps> = ({ configVersion }) => {
             lazyUpdate={true}
             theme={'dark'}
           />
-        ) : (
+        )}
+        {isLoading && !payload && (
           <div className="tactical-loading">
-            <p>Initializing sensor array...</p>
+            <p>{loadingMessage}</p>
+          </div>
+        )}
+        {isLoading && payload && (
+          <div className="tactical-loading-overlay">
+            <div className="tactical-spinner" />
+            <p className="tactical-loading-text">{loadingMessage}</p>
           </div>
         )}
       </div>
