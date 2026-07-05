@@ -39,8 +39,8 @@ Because the enemy drones are too fast and erratic for direct pursuit, players mu
 
 - [x] **Backend Math Engine**: Implement the spatial parametric curves and temporal modulation in Python/Polars to generate dynamic PDFs.
 - [x] **Data Streaming API**: Create a FastAPI WebSocket endpoint to evaluate the total PDF on-demand, downsample the matrix, and stream JSON payloads to the client.
-- [ ] **Frontend Canvas Integration**: Configure an Apache ECharts canvas to render the incoming downsampled PDF matrix as a high-performance heatmap.
-- [ ] **Time-Scrubbing UI**: Build the interactive timeline slider in React to allow users to observe PDF shifts over a 24-hour simulation cycle.
+- [x] **Frontend Canvas Integration**: Configure an Apache ECharts canvas to render the incoming downsampled PDF matrix as a high-performance heatmap.
+- [x] **Time-Scrubbing UI**: Build the interactive timeline slider in React to allow users to observe PDF shifts over a 24-hour simulation cycle.
 - [ ] **Basic Interception Logic**: Create the FastAPI endpoint to validate a "Drop Net" event based on target coordinates, net radius, and time of impact.
 
 #### Phase II: RPG Mechanics & Persistence

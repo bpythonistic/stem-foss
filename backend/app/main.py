@@ -21,10 +21,10 @@ from app.features.target_pdf_helpers import router as target_pdf_router
 from app.schemas.pydmodels import (
     GenericMessage,
     DefaultTargetRequest,
-    SimulationState,
-    get_sim_state,
     PDFParamState,
+    SimulationState,
     get_param_state,
+    get_sim_state,
 )
 from app.schemas.sqlmodels import (
     Map,
@@ -274,6 +274,7 @@ def save_target_state(
     session: SessionDep,
     load_from_db: bool = False,
     current_sim_state: SimulationState = Depends(get_sim_state),
+    current_param_state: PDFParamState = Depends(get_param_state),
 ) -> GenericMessage:
     """
     Caches the lane configuration for a given target specification.
@@ -327,7 +328,7 @@ def save_target_state(
         )
 
     try:
-        save_map_state(target_map, target_specs)
+        save_map_state(target_map, target_specs, current_param_state)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
