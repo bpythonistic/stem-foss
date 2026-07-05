@@ -230,6 +230,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({
 
   useEffect(() => {
     if (payload) {
+      console.log('Updating chart options with new payload');
       const newOptions: EChartsOption = {
         title: {
           text: 'Tactical Map',
