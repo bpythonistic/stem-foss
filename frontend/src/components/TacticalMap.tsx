@@ -115,7 +115,7 @@ const TacticalMap: React.FC<TacticalMapProps> = ({
           num_small_targets: 15,
           num_medium_targets: 10,
           num_large_targets: 5,
-          num_heat_points: 15,
+          num_hot_spots: 15,
         });
         const newMap = await fetchMaps().then((maps) =>
           maps.find((m) => m.id === map.id),

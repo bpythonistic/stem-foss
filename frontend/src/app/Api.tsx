@@ -125,7 +125,7 @@ interface Map {
   num_small_targets: number;
   num_medium_targets: number;
   num_large_targets: number;
-  num_heat_points: number;
+  num_hot_spots: number;
 }
 
 export const fetchRoot = async (): Promise<{ message: string }> => {

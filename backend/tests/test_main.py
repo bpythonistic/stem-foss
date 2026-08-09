@@ -137,7 +137,7 @@ class DataForTests:
             num_small_targets=5,
             num_medium_targets=3,
             num_large_targets=2,
-            num_heat_points=8,
+            num_hot_spots=8,
         ),
         expected_output=(
             status.HTTP_201_CREATED,
@@ -151,7 +151,7 @@ class DataForTests:
                 "num_small_targets": 5,
                 "num_medium_targets": 3,
                 "num_large_targets": 2,
-                "num_heat_points": 8,
+                "num_hot_spots": 8,
             },
         ),
     )
@@ -508,4 +508,4 @@ class TestEndpoints:
                 },
             )
         assert database_setup
-        assert tmp_path.glob("current_lanes_for_*.parquet")
+        assert tmp_path.glob("current_hot_spots_for_*.parquet")

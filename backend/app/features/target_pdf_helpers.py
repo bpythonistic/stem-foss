@@ -1,7 +1,7 @@
 """
 Provides helper functions for formatting and caching PDFs.
 
-- save_map_state: Caches lane configs to Parquet and precomputes all frames.
+- save_map_state: Caches hot spot configs to Parquet and precomputes all frames.
 - get_echarts_payload: Formats PDF matrices for frontend UI.
 - tactical_map_stream: WebSocket endpoint for UI streaming.
 """
@@ -17,9 +17,9 @@ import polars as pl
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from app.features.target_mechanics import (
-    describe_lanes,
+    describe_hot_spots,
     evaluate_total_pdf,
-    generate_map_heat_points,
+    generate_hot_spots,
 )
 from app.schemas.pydmodels import (
     PDFParamState,
@@ -90,7 +90,7 @@ def save_map_state(
     parquet_path: Path | None = None,
 ) -> None:
     """
-    Caches the static map routes to a file and precomputes all PDF frames.
+    Caches the static hot spot config to a file and precomputes all PDF frames.
 
     Args:
         target_map (TargetMap): The active operational zone map.
@@ -102,17 +102,17 @@ def save_map_state(
     Returns:
         None
     """
-    heat_points = generate_map_heat_points(target_map)
-    lanes_lf = describe_lanes(target_map, heat_points, target_specs)
+    hot_spots = generate_hot_spots(target_map)
+    hot_spots_lf = describe_hot_spots(target_map, hot_spots, target_specs)
     data_dir = PARQUET_DIR if parquet_path is None else parquet_path
-    lanes_lf.collect().write_parquet(
-        data_dir / f"current_lanes_for_{target_specs.id}.parquet"
+    hot_spots_lf.collect().write_parquet(
+        data_dir / f"current_hot_spots_for_{target_specs.id}.parquet"
     )
     if param_state is not None:
         try:
             _precompute_frames(target_map, target_specs, param_state)
         except (ValueError, FileNotFoundError):
-            # Lane file was written to a non-default path (e.g. tests); skip.
+            # Hot spot file was written to a non-default path (e.g. tests); skip.
             pass
 
 
@@ -184,7 +184,7 @@ def clear_parquet_cache(parquet_path: Path | None = None) -> None:
         None
     """
     data_dir = PARQUET_DIR if parquet_path is None else parquet_path
-    for file in data_dir.glob("current_lanes_for_*.parquet"):
+    for file in data_dir.glob("current_hot_spots_for_*.parquet"):
         try:
             file.unlink()
             print(f"Deleted cached file: {file}")
@@ -209,7 +209,7 @@ def get_echarts_payload(
 
     Args:
         target_map_str (str): JSON string of the active map.
-        target_specs_id (str): UUID for locating the lane Parquet file.
+        target_specs_id (str): UUID for locating the hot spot Parquet file.
         target_time (datetime): The exact moment to evaluate the PDF.
         duration (timedelta): Total simulation cycle length.
         time_steps (int): Temporal resolution of the simulation.
@@ -220,18 +220,18 @@ def get_echarts_payload(
     """
     target_map = TargetMap(**json.loads(target_map_str))
     try:
-        lanes = pl.scan_parquet(
-            PARQUET_DIR / f"current_lanes_for_{target_specs_id}.parquet"
+        hot_spots = pl.scan_parquet(
+            PARQUET_DIR / f"current_hot_spots_for_{target_specs_id}.parquet"
         )
     except FileNotFoundError:
         raise ValueError(
-            "Lane configuration for target_specs_id "
+            "Hot spot configuration for target_specs_id "
             f"{target_specs_id} not found in cache."
         )
 
     # 1. Run the physics engine at full resolution
     pdf_at_time = evaluate_total_pdf(
-        target_map, lanes, target_time, duration, time_steps
+        target_map, hot_spots, target_time, duration, time_steps
     )
     pdf_df = pdf_at_time(target_time).collect()
     x_axes = pdf_df.select("x").to_series().unique().sort()

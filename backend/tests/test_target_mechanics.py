@@ -56,12 +56,12 @@ class MapData(BaseModel):
     Attributes:
         map_size (float): The size of the map (units)
         resolution (float): The resolution of the map (pixels per unit)
-        num_heat_points (int): The number of heat points to generate on the map
+        num_hot_spots (int): The number of hot spots to generate on the map
     """
 
     map_size: float = 100.0
     samples: int = 200
-    num_heat_points: int = 10
+    num_hot_spots: int = 10
 
 
 class DataModel(BaseModel):
@@ -116,7 +116,7 @@ def database_setup_fixture(
                 num_large_targets=targets_in.number_of_targets.get(
                     sql_schemas.TargetClass.LARGE, 0
                 ),
-                num_heat_points=map_in.num_heat_points,
+                num_hot_spots=map_in.num_hot_spots,
             )
             session.add(target_map)
             session.commit()
@@ -134,7 +134,7 @@ def database_setup_fixture(
                 target_map=MapData(
                     map_size=100.0,
                     samples=200,
-                    num_heat_points=10,
+                    num_hot_spots=10,
                 ),
                 target_data=Targets(
                     number_of_targets={
@@ -154,7 +154,7 @@ def database_setup_fixture(
                 target_map=MapData(
                     map_size=100.0,
                     samples=200,
-                    num_heat_points=10,
+                    num_hot_spots=10,
                 ),
                 target_data=Targets(
                     number_of_targets={
@@ -198,15 +198,17 @@ def test_evaluate_total_pdf(
     if target_map is None:
         raise ValueError("No map found in the database.")
     targets = session.exec(select(sql_schemas.Target)).all()
-    heat_points = tm.generate_map_heat_points(target_map)
-    target_lanes = [
-        tm.describe_lanes(target_map, heat_points, target) for target in targets
+    hot_spots = tm.generate_hot_spots(target_map)
+    target_hot_spots = [
+        tm.describe_hot_spots(target_map, hot_spots, target) for target in targets
     ]
     start_time = datetime.now() - timedelta(hours=24)
 
     total_pdf_funcs = [
-        tm.evaluate_total_pdf(target_map, lanes, start_time, time_window, time_steps)
-        for lanes in target_lanes
+        tm.evaluate_total_pdf(
+            target_map, spots, start_time, time_window, time_steps
+        )
+        for spots in target_hot_spots
     ]
 
     for total_pdf_func in total_pdf_funcs:
