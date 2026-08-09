@@ -10,9 +10,14 @@ backend = "cd backend && uvicorn app.main:app --reload --env-file app/.env"
 audit-nodejs = "npm audit fix || true"
 update-nodejs = "npm install --save-dev"
 compile-ts = { cmd = "tsc", depends-on = ["update-nodejs", "audit-nodejs"] }
+watch-ts = "tsc -w"
 build = "npm run build"
 pre-commit = "npx lint-staged && ruff check --fix && ruff format"
-frontend = "(tsc -w &) ; npm run dev"
+frontend = { cmd = "(pixi run watch-ts &) ; npm run dev", depends-on = [
+    "update-nodejs",
+    "audit-nodejs",
+    "compile-ts",
+] }
 backend-tests = "pytest --cov=app backend/tests/"
 
 [dependencies]
