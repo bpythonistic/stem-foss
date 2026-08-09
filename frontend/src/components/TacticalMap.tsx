@@ -3,8 +3,6 @@ import { EChartsReact } from 'react-echarts-library';
 import type { EChartsOption } from 'echarts';
 import {
   TargetClass,
-  createUser,
-  fetchUser,
   fetchMaps,
   fetchTargets,
   createMap,
@@ -22,6 +20,7 @@ interface EChartsPayload {
 }
 
 interface TacticalMapProps {
+  userId: string;
   configVersion: number;
   selectedTargetClass: TargetClass;
   relSeconds: number;
@@ -47,13 +46,12 @@ const tickIndices = (values: number[], step = 10): Set<number> => {
 };
 
 const TacticalMap: React.FC<TacticalMapProps> = ({
+  userId,
   configVersion,
   selectedTargetClass,
   relSeconds,
 }) => {
   const [payload, setPayload] = useState<EChartsPayload | null>(null);
-  const [userName] = useState<string>('DefaultUser');
-  const [userId, setUserId] = useState<string | null>(null);
   const [mapId, setMapId] = useState<string | null>(null);
   const [smallTargetId, setSmallTargetId] = useState<string | null>(null);
   const [mediumTargetId, setMediumTargetId] = useState<string | null>(null);
@@ -89,19 +87,6 @@ const TacticalMap: React.FC<TacticalMapProps> = ({
     const initializeData = async () => {
       setIsLoading(true);
       setLoadingMessage('Initializing sensor array...');
-      if (!userId) {
-        const existingUser = await fetchUser(userName).catch(() => null);
-        if (existingUser && existingUser.id) {
-          setUserId(existingUser.id);
-        } else {
-          await createUser({ name: userName, class_name: 'DefaultClass' });
-          const newUser = await fetchUser(userName);
-          if (!newUser || !newUser.id) {
-            throw new Error('User ID not returned from API');
-          }
-          setUserId(newUser.id);
-        }
-      }
       const targets = await fetchTargets().catch(() => []);
       const selectedTarget = targets.find((t) => t.category === selectedTargetClass);
       let selectedTargetId = selectedTarget ? selectedTarget.id : null;

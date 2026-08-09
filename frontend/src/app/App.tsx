@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
 import TacticalMap from '../components/TacticalMap';
 import MapConfigUI from '../components/MapConfigUI';
+import Login from '../components/Login';
 import { TargetClass } from './Api';
 import './App.css';
+
+interface Operator {
+  id: string;
+  name: string;
+}
 
 const TIME_RANGE = { min: 0, max: 86100, step: 300 };
 
@@ -17,16 +23,32 @@ const formatOffset = (seconds: number): string => {
 };
 
 const App: React.FC = () => {
+  const [operator, setOperator] = useState<Operator | null>(null);
   const [configVersion, setConfigVersion] = useState<number>(0);
   const [selectedTargetClass, setSelectedTargetClass] = useState<TargetClass>(
     TargetClass.Small,
   );
   const [relSeconds, setRelSeconds] = useState<number>(0);
 
+  // Gate the app behind operator login until a user is resolved.
+  if (!operator) {
+    return <Login onLogin={setOperator} />;
+  }
+
   return (
     <div className="app-container">
       <header className="app-header">
         <h1>Project Netfall Central Command</h1>
+        <div className="operator-bar">
+          <span className="operator-name">Operator: {operator.name}</span>
+          <button
+            type="button"
+            className="operator-logout"
+            onClick={() => setOperator(null)}
+          >
+            Log Out
+          </button>
+        </div>
       </header>
 
       <main className="app-layout">
@@ -66,6 +88,7 @@ const App: React.FC = () => {
 
         <section className="main-content">
           <TacticalMap
+            userId={operator.id}
             configVersion={configVersion}
             selectedTargetClass={selectedTargetClass}
             relSeconds={relSeconds}
