@@ -205,9 +205,7 @@ def test_evaluate_total_pdf(
     start_time = datetime.now() - timedelta(hours=24)
 
     total_pdf_funcs = [
-        tm.evaluate_total_pdf(
-            target_map, spots, start_time, time_window, time_steps
-        )
+        tm.evaluate_total_pdf(target_map, spots, start_time, time_window, time_steps)
         for spots in target_hot_spots
     ]
 
