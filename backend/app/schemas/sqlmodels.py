@@ -320,7 +320,7 @@ class DefaultTargets(SQLModel, table=True):
 
 class Map(SQLModel, table=True):
     """
-    Defines spatial boundaries and zone traffic configurations.
+    Defines spatial boundaries and zone hot spot configurations.
 
     Attributes:
         id (str): Unique UUID4 primary key for
@@ -341,8 +341,8 @@ class Map(SQLModel, table=True):
             standard drones in the zone.
         num_large_targets (int): Total volume of
             heavy transport drones in the zone.
-        num_heat_points (int): The number of origin
-            and destination nodes for lanes.
+        num_hot_spots (int): The number of congregation
+            hot spots where drones pause or gather.
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
@@ -354,7 +354,7 @@ class Map(SQLModel, table=True):
     num_small_targets: int = Field(..., gt=0)
     num_medium_targets: int = Field(..., gt=0)
     num_large_targets: int = Field(..., gt=0)
-    num_heat_points: int = Field(..., gt=0)
+    num_hot_spots: int = Field(..., gt=0)
 
 
 def get_session() -> Generator[Session, None, None]:

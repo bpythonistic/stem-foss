@@ -277,7 +277,7 @@ def save_target_state(
     current_param_state: PDFParamState = Depends(get_param_state),
 ) -> GenericMessage:
     """
-    Caches the lane configuration for a given target specification.
+    Caches the hot spot configuration for a given target specification.
 
     Args:
         target_specs_id (str): The UUID of the

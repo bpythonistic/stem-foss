@@ -17,7 +17,7 @@ Players act as independent contractors operating a high-altitude UAV. They must 
 ## 3. Key Architectural Decisions
 
 - **WebSocket Streaming:** To prevent UI freezing during timeline scrubbing, the FastAPI backend calculates the math, downsamples the Polars dataframe, explicitly formats the array as `[x_index, y_index, value]`, and streams a pre-serialized JSON payload directly to the React frontend.
-- **Parquet Caching:** Instead of keeping the generated map traffic lanes (`pl.LazyFrame`) in RAM, the backend writes the generated route specs to `.parquet` files. The WebSocket worker lazily scans these files on demand.
+- **Parquet Caching:** Instead of keeping the generated hot spot specs (`pl.LazyFrame`) in RAM, the backend writes them to `.parquet` files. The WebSocket worker lazily scans these files on demand.
 - **Dependency Injection for State:** FastAPI global configurations (like simulation duration and time steps) are managed via `Depends()` injected singleton models, avoiding direct and unsafe mutations to `app.state`.
 - **Global Dark Mode:** The UI utilizes a custom "tactical radar" aesthetic (neon greens, deep blues, dark backgrounds). Styles are heavily driven by global CSS variables in `index.css`.
 
@@ -36,7 +36,7 @@ Due to external time constraints, Phase II (Database, RPG progression, and state
 When modifying the codebase, keep the following resolved bugs in mind:
 
 - **Polars Array Broadcasting:** When adding random NumPy arrays to a Polars `LazyFrame`, the frame must be collected into a `DataFrame` first, and `pl.Series()` must be used instead of `pl.lit()` to prevent dimension mismatch errors.
-- **Polars Scalar Extraction:** When fetching a single traffic multiplier for a specific time step, the temporal dataframe must be actively filtered for the exact `current_time` (using `.head(1)` and checking `.height > 0`) before calling `.item(0, 0)`.
+- **Polars Scalar Extraction:** When fetching a single density multiplier for a specific time step, the temporal dataframe must be actively filtered for the exact `current_time` (using `.head(1)` and checking `.height > 0`) before calling `.item(0, 0)`.
 - **JSON NaN Serialization:** Python's `json.dumps()` silently outputs unquoted `NaN` or `Infinity` values if the math engine divides by zero, causing Javascript `SyntaxError` crashes on the frontend. The backend must strictly filter for `is_finite()` and enforce `allow_nan=False` during serialization.
 - **React WebSocket Race Conditions:** When switching target classes in the UI, the frontend must explicitly call the backend to generate the Parquet cache for the new target (`saveTargetState`) _before_ opening the new WebSocket, and manually jumpstart the data stream upon connection.
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Project Netfall is a FOSS application that gamifies STEM education through a tactical UAV interception simulator. Players analyze spatiotemporal Probability Density Functions (PDFs) of drone traffic to execute timed net-drop interceptions. The app teaches PDFs through hands-on analysis.
+Project Netfall is a FOSS application that gamifies STEM education through a tactical UAV interception simulator. Players analyze spatiotemporal Probability Density Functions (PDFs) of where drones pause and congregate to execute timed net-drop interceptions. The app teaches PDFs through hands-on analysis.
 
 ## Commands
 
@@ -48,13 +48,13 @@ The backend is a FastAPI application with two distinct layers:
 
 **Physics engine** (`app/features/target_mechanics.py`): Pure NumPy/Polars math with no I/O. The PDF pipeline:
 
-1. `generate_map_heat_points` — random anchor nodes on the map grid
-2. `describe_lanes` — parametric routes between nodes, with per-target-class variance
-3. `map_lane_traffic` — Gaussian spread around each lane (spatial PDF component)
-4. `calculate_temporal_lane_traffic` — amplitude-modulated rush-hour surges (temporal component)
+1. `generate_hot_spots` — random congregation centers on the map grid
+2. `describe_hot_spots` — assigns crowd density and radial spread per hot spot, with per-target-class variance
+3. `map_hot_spot_density` — radial Gaussian blob around each hot spot center, i.e. probability by distance-to-point (spatial PDF component)
+4. `calculate_temporal_hot_spot_density` — amplitude-modulated dwell surges (temporal component)
 5. `evaluate_total_pdf` — returns a `Callable[[datetime], pl.LazyFrame]` that combines both components at a specific moment
 
-Lane configurations are saved to Parquet files under `backend/app/data/parquet_cache/` via `save_map_state`. The WebSocket reads these files on each frame request.
+Hot spot configurations are saved to Parquet files (`current_hot_spots_for_*.parquet`) under `backend/app/data/parquet_cache/` via `save_map_state`. The WebSocket reads these files on each frame request.
 
 **Schemas** (`app/schemas/`):
 
