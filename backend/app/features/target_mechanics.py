@@ -5,13 +5,14 @@ Defines the mathematical engine for target physics and loot.
 - generate_hot_spots: Creates randomized congregation centers.
 - describe_hot_spots: Assigns density and spread to each hot spot.
 - map_hot_spot_density: Maps radial Gaussian spread for hot spots.
-- calculate_temporal_hot_spot_density: Simulates dwell surges over time.
+- calculate_temporal_hot_spot_density: Models gather-dwell-disperse crowding over time.
 - evaluate_total_pdf: Evaluates combined spatiotemporal PDF.
 - calculate_loot: Calculates reward payouts based on stats.
 """
 
+import hashlib
 from datetime import datetime, timedelta
-from typing import Callable, Generator
+from typing import Callable, Generator, NamedTuple
 
 import numpy as np
 import numpy.random as npr
@@ -20,6 +21,77 @@ import polars as pl
 from app.schemas.sqlmodels import LootDist, Map, Target, TargetClass
 
 npr.seed(42)  # Set a fixed seed for reproducibility
+
+
+class DwellProfile(NamedTuple):
+    """
+    Gather-dwell-disperse tuning for a single target class.
+
+    A dwell event is a flat-topped surge in crowd density: drones gather
+    (ramp up), dwell on a plateau while congregated, then disperse along a
+    gentle tail. Heavier classes are tuned to linger longer on wider
+    plateaus with softer peaks; lighter classes spike higher but briefly.
+
+    Attributes:
+        amplitude (float): Peak surge height as a multiple of base density.
+        plateau_frac (float): Dwell-window width as a fraction of duration.
+        rise_frac (float): Gather ramp time as a fraction of duration.
+        fall_frac (float): Disperse tail time as a fraction of duration.
+    """
+
+    amplitude: float
+    plateau_frac: float
+    rise_frac: float
+    fall_frac: float
+
+
+# Per-class dwell tuning. Fall times exceed rise times so crowds disperse
+# more gradually than they gather, giving an asymmetric disperse tail.
+_DWELL_PROFILES: dict[TargetClass, DwellProfile] = {
+    TargetClass.SMALL: DwellProfile(
+        amplitude=6.0, plateau_frac=0.08, rise_frac=0.02, fall_frac=0.05
+    ),
+    TargetClass.MEDIUM: DwellProfile(
+        amplitude=4.5, plateau_frac=0.16, rise_frac=0.04, fall_frac=0.10
+    ),
+    TargetClass.LARGE: DwellProfile(
+        amplitude=3.0, plateau_frac=0.28, rise_frac=0.07, fall_frac=0.18
+    ),
+}
+
+# Floor on ramp durations so plateaus stay smooth even for short simulations.
+_MIN_TRANSITION_SECONDS = 60.0
+
+# Resting crowd level between dwell events, as a fraction of a hot spot's base
+# density. Kept small (not the full base) so a hot spot fades close to empty
+# once its drones disperse: blobs must visibly appear and vanish as the time
+# slider moves, rather than every hot spot staying permanently congregated.
+_DWELL_BASELINE = 0.1
+
+
+def _sigmoid(x: np.ndarray) -> np.ndarray:
+    """Numerically stable logistic ramp used to shape dwell transitions."""
+    return 1.0 / (1.0 + np.exp(-np.clip(x, -60.0, 60.0)))
+
+
+def _hot_spot_seed(hot_spot: dict[str, float]) -> int:
+    """
+    Derives a stable seed from a hot spot's location and crowd density.
+
+    Seeding the dwell schedule from the hot spot itself keeps each spot's
+    gather-dwell-disperse curve identical across every frame, so the
+    progression reads coherently as the time slider is scrubbed rather than
+    re-randomizing on each evaluation.
+    """
+    coords = (
+        hot_spot["center_x"],
+        hot_spot["center_y"],
+        hot_spot["hot_spot_density"],
+    )
+    digest = hashlib.sha256(
+        ",".join(f"{value:.6f}" for value in coords).encode()
+    ).hexdigest()
+    return int(digest[:8], 16)
 
 
 def get_target_classes(user_id: str, map_id: str) -> tuple[Target, Target, Target]:
@@ -250,68 +322,69 @@ def calculate_temporal_hot_spot_density(
     start_time: datetime,
     duration: timedelta,
     time_steps: int,
+    category: TargetClass = TargetClass.MEDIUM,
 ) -> Generator[pl.LazyFrame, None, None]:
     """
-    Simulates dwell surges at hot spots using amplitude waves.
+    Models gather-dwell-disperse crowding at hot spots over time.
 
-    Each hot spot gathers a crowd during randomized dwell windows,
-    modelled as Gaussian surges in time around each window.
+    Each hot spot hosts one to three dwell events. A dwell event is a
+    flat-topped surge rather than an instantaneous spike: drones *gather*
+    (a logistic ramp up), *dwell* on a plateau while congregated, then
+    *disperse* along a gentle tail. The plateau width and the gather and
+    disperse ramps are tuned per target class via ``_DWELL_PROFILES`` so
+    heavier classes linger longer with softer peaks.
+
+    Each hot spot's dwell schedule is seeded from its own coordinates, so
+    the same curve is produced on every evaluation and the progression
+    reads coherently as the simulation time advances.
 
     Args:
         hot_spots (pl.LazyFrame): The hot spots
-            to apply dwell surges to.
+            to apply dwell events to.
         start_time (datetime): The absolute
             start of the simulation.
         duration (timedelta): The total
             simulated cycle duration.
         time_steps (int): The resolution
             of the time simulation.
+        category (TargetClass): The target class whose
+            dwell profile tunes amplitude and window widths.
     Returns:
-        Generator: Generates crowd density
-            multipliers over time.
+        Generator: Generates a crowd density
+            curve over time, one per hot spot.
     """
     time_series = pl.Series(
         "time",
         pl.linear_space(start_time, start_time + duration, time_steps, eager=True),
     )
-    num_dwell_events = pl.Series(
-        "num_dwell_events", npr.randint(1, 4, size=hot_spots.collect().shape[0])
+    elapsed = np.array(
+        [(moment - start_time).total_seconds() for moment in time_series],
+        dtype=np.float64,
     )
-    for i, hot_spot in enumerate(hot_spots.collect().iter_rows(named=True)):
-        dwell_windows = pl.Series(
-            "dwell_windows",
-            time_series.sample(num_dwell_events[i], with_replacement=False).sort(),
-        ).to_list()
-        density_patterns = [
-            pl.DataFrame(
-                {
-                    "time": time_series,
-                    "density": (
-                        hot_spot["hot_spot_density"]
-                        + hot_spot["hot_spot_density"]
-                        * (npr.rand() + 1)
-                        * 5
-                        * (
-                            -0.5
-                            * (
-                                (dwell_window - start_time).total_seconds()
-                                - time_series.map_elements(
-                                    lambda x: (x - start_time).total_seconds()
-                                )
-                            )
-                            ** 2
-                            / (60 * 60) ** 2
-                        ).exp()
-                    ),
-                }
-            ).lazy()
-            for dwell_window in dwell_windows
-        ]
-        yield (
-            pl.concat(density_patterns)
-            .group_by("time")
-            .agg(pl.sum("density").alias("total_density"))
-        )
+
+    total_seconds = max(duration.total_seconds(), 1.0)
+    profile = _DWELL_PROFILES.get(category, _DWELL_PROFILES[TargetClass.MEDIUM])
+    plateau_seconds = profile.plateau_frac * total_seconds
+    rise_seconds = max(profile.rise_frac * total_seconds, _MIN_TRANSITION_SECONDS)
+    fall_seconds = max(profile.fall_frac * total_seconds, _MIN_TRANSITION_SECONDS)
+
+    for hot_spot in hot_spots.collect().iter_rows(named=True):
+        base_density = hot_spot["hot_spot_density"]
+        rng = np.random.default_rng(_hot_spot_seed(hot_spot))
+        sample_size = min(int(rng.integers(1, 4)), elapsed.shape[0])
+        dwell_centers = np.sort(rng.choice(elapsed, size=sample_size, replace=False))
+
+        crowd_density = np.full_like(elapsed, base_density * _DWELL_BASELINE)
+        for center in dwell_centers:
+            gather_edge = center - plateau_seconds / 2.0
+            disperse_edge = center + plateau_seconds / 2.0
+            ramp_up = _sigmoid((elapsed - gather_edge) / rise_seconds)
+            ramp_down = _sigmoid((disperse_edge - elapsed) / fall_seconds)
+            plateau = ramp_up * ramp_down
+            surge = base_density * (rng.random() + 1.0) * profile.amplitude
+            crowd_density = crowd_density + surge * plateau
+
+        yield pl.DataFrame({"time": time_series, "total_density": crowd_density}).lazy()
 
 
 def evaluate_total_pdf(
@@ -320,6 +393,7 @@ def evaluate_total_pdf(
     start_time: datetime,
     duration: timedelta,
     time_steps: int,
+    category: TargetClass = TargetClass.MEDIUM,
 ) -> Callable[[datetime], pl.LazyFrame]:
     """
     Combines spatial and temporal matrices into a final PDF.
@@ -335,6 +409,8 @@ def evaluate_total_pdf(
             of the simulated cycle.
         time_steps (int): The resolution
             of the time simulation.
+        category (TargetClass): The target class whose
+            dwell profile tunes the temporal component.
     Returns:
         Callable: A function that evaluates
             the PDF at a specific time.
@@ -356,7 +432,7 @@ def evaluate_total_pdf(
         for (spot_density, _), temporal_density in zip(
             map_hot_spot_density(target_map, hot_spots),
             calculate_temporal_hot_spot_density(
-                hot_spots, start_time, duration, time_steps
+                hot_spots, start_time, duration, time_steps, category
             ),
         ):
             current_density_df = (
