@@ -69,9 +69,9 @@ _MIN_TRANSITION_SECONDS = 60.0
 _DWELL_BASELINE = 0.1
 
 
-def _sigmoid(x: np.ndarray) -> np.ndarray:
+def _sigmoid(x: pl.Expr) -> pl.Expr:
     """Numerically stable logistic ramp used to shape dwell transitions."""
-    return 1.0 / (1.0 + np.exp(-np.clip(x, -60.0, 60.0)))
+    return 1.0 / (1.0 + (-x.clip(-60.0, 60.0)).exp())
 
 
 def _hot_spot_seed(hot_spot: dict[str, float]) -> int:
@@ -353,38 +353,49 @@ def calculate_temporal_hot_spot_density(
         Generator: Generates a crowd density
             curve over time, one per hot spot.
     """
-    time_series = pl.Series(
-        "time",
-        pl.linear_space(start_time, start_time + duration, time_steps, eager=True),
-    )
-    elapsed = np.array(
-        [(moment - start_time).total_seconds() for moment in time_series],
-        dtype=np.float64,
-    )
-
     total_seconds = max(duration.total_seconds(), 1.0)
     profile = _DWELL_PROFILES.get(category, _DWELL_PROFILES[TargetClass.MEDIUM])
     plateau_seconds = profile.plateau_frac * total_seconds
     rise_seconds = max(profile.rise_frac * total_seconds, _MIN_TRANSITION_SECONDS)
     fall_seconds = max(profile.fall_frac * total_seconds, _MIN_TRANSITION_SECONDS)
 
+    # Shared lazy time grid: absolute timestamps alongside elapsed seconds.
+    time_grid = pl.LazyFrame().select(
+        time=pl.linear_space(start_time, start_time + duration, time_steps),
+        elapsed=pl.linear_space(0.0, total_seconds, time_steps),
+    )
+    # Seeding a hot spot's dwell centres needs concrete grid values; the
+    # density curve itself stays a lazy expression evaluated over the grid.
+    elapsed_grid = time_grid.select("elapsed").collect().to_series().to_numpy()
+
     for hot_spot in hot_spots.collect().iter_rows(named=True):
         base_density = hot_spot["hot_spot_density"]
         rng = np.random.default_rng(_hot_spot_seed(hot_spot))
-        sample_size = min(int(rng.integers(1, 4)), elapsed.shape[0])
-        dwell_centers = np.sort(rng.choice(elapsed, size=sample_size, replace=False))
+        sample_size = min(int(rng.integers(1, 4)), elapsed_grid.shape[0])
+        dwell_centers = np.sort(
+            rng.choice(elapsed_grid, size=sample_size, replace=False)
+        )
 
-        crowd_density = np.full_like(elapsed, base_density * _DWELL_BASELINE)
-        for center in dwell_centers:
-            gather_edge = center - plateau_seconds / 2.0
-            disperse_edge = center + plateau_seconds / 2.0
-            ramp_up = _sigmoid((elapsed - gather_edge) / rise_seconds)
-            ramp_down = _sigmoid((disperse_edge - elapsed) / fall_seconds)
-            plateau = ramp_up * ramp_down
-            surge = base_density * (rng.random() + 1.0) * profile.amplitude
-            crowd_density = crowd_density + surge * plateau
+        surges = base_density * (rng.random(sample_size) + 1.0) * profile.amplitude
+        gather_edges = dwell_centers - plateau_seconds / 2.0
+        disperse_edges = dwell_centers + plateau_seconds / 2.0
 
-        yield pl.DataFrame({"time": time_series, "total_density": crowd_density}).lazy()
+        # Each dwell event contributes a flat-topped plateau; the hot spot's
+        # curve is their sum over the resting baseline -- a horizontal reduction
+        # across events rather than an accumulator loop.
+        plateau_terms = [
+            surge
+            * _sigmoid((pl.col("elapsed") - gather_edge) / rise_seconds)
+            * _sigmoid((disperse_edge - pl.col("elapsed")) / fall_seconds)
+            for surge, gather_edge, disperse_edge in zip(
+                surges, gather_edges, disperse_edges
+            )
+        ]
+        crowd_density = base_density * _DWELL_BASELINE + pl.sum_horizontal(
+            plateau_terms
+        )
+
+        yield time_grid.select("time", total_density=crowd_density)
 
 
 def evaluate_total_pdf(
@@ -453,7 +464,6 @@ def evaluate_total_pdf(
                 )
                 .with_columns(pdf=(pl.col("spot_density") * current_density))
                 .select(pl.col("x"), pl.col("y"), pl.col("pdf").fill_null(0))
-                .lazy()
             )
 
     def total_pdf_at_time(current_time: datetime) -> pl.LazyFrame:

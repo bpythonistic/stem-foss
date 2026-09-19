@@ -7,9 +7,25 @@ version = "0.1.0"
 
 [tasks]
 backend = "cd backend && uvicorn app.main:app --reload --env-file app/.env"
-audit-nodejs = "npm audit fix || true"
-update-nodejs = "npm install --save-dev"
-compile-ts = { cmd = "tsc", depends-on = ["update-nodejs", "audit-nodejs"] }
+update-nodejs = { cmd = "npm install --save-dev", inputs = [
+    "package.json",
+], outputs = [
+    "package-lock.json",
+] }
+audit-nodejs = { cmd = "npm audit fix || true", inputs = [
+    "package-lock.json",
+], outputs = [
+    "package-lock.json",
+] }
+compile-ts = { cmd = "tsc", depends-on = [
+    "update-nodejs",
+    "audit-nodejs",
+], inputs = [
+    "tsconfig.json",
+    "src/**/*.ts",
+], outputs = [
+    "dist/**/*.js",
+] }
 build = "npm run build"
 pre-commit = "npx lint-staged && ruff check --fix && ruff format"
 frontend = "(tsc -w &) ; npm run dev"
