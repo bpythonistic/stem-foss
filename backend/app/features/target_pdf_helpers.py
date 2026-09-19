@@ -147,11 +147,13 @@ def _precompute_frames(
         frames[rel_secs] = get_echarts_payload(
             target_map_str=target_map_str,
             target_specs_id=target_id,
+            start_time=start_dt,
             target_time=target_time,
             duration=duration,
             time_steps=time_steps,
             downsample_step=downsample_step,
             num_targets=num_targets,
+            category=target_specs.category,
         )
 
     _frame_cache[target_id] = frames
@@ -198,11 +200,13 @@ def clear_parquet_cache(parquet_path: Path | None = None) -> None:
 def get_echarts_payload(
     target_map_str: str,
     target_specs_id: str,
+    start_time: datetime,
     target_time: datetime,
     duration: timedelta,
     time_steps: int,
     downsample_step: int = 4,
     num_targets: int = 1,
+    category: TargetClass = TargetClass.MEDIUM,
 ) -> str:
     """
     Returns P(at least one target within 5 map-units) at every grid cell.
@@ -210,11 +214,17 @@ def get_echarts_payload(
     Args:
         target_map_str (str): JSON string of the active map.
         target_specs_id (str): UUID for locating the hot spot Parquet file.
-        target_time (datetime): The exact moment to evaluate the PDF.
+        start_time (datetime): The fixed start of the simulation window. The
+            dwell schedule spans ``[start_time, start_time + duration]``; this
+            must stay constant across frames so the gather-dwell-disperse
+            progression advances as ``target_time`` moves through the window.
+        target_time (datetime): The moment within the window to evaluate.
         duration (timedelta): Total simulation cycle length.
         time_steps (int): Temporal resolution of the simulation.
         downsample_step (int): Spatial subsampling factor.
         num_targets (int): Number of independent targets of this class.
+        category (TargetClass): Target class whose dwell profile tunes the
+            temporal component of the PDF.
     Returns:
         str: Serialized JSON payload formatted for ECharts.
     """
@@ -229,9 +239,10 @@ def get_echarts_payload(
             f"{target_specs_id} not found in cache."
         )
 
-    # 1. Run the physics engine at full resolution
+    # 1. Run the physics engine at full resolution. The simulation window is
+    #    anchored at start_time; target_time is the moving evaluation point.
     pdf_at_time = evaluate_total_pdf(
-        target_map, hot_spots, target_time, duration, time_steps
+        target_map, hot_spots, start_time, duration, time_steps, category
     )
     pdf_df = pdf_at_time(target_time).collect()
     x_axes = pdf_df.select("x").to_series().unique().sort()
@@ -370,18 +381,19 @@ async def tactical_map_stream(
 
                 if payload_json is None:
                     # Fallback: compute on demand in a thread
-                    target_time = datetime.fromisoformat(start_time) + timedelta(
-                        seconds=rel_secs
-                    )
+                    sim_start = datetime.fromisoformat(start_time)
+                    target_time = sim_start + timedelta(seconds=rel_secs)
                     payload_json = await asyncio.to_thread(
                         get_echarts_payload,
                         target_map_str=target_map_str,
                         target_specs_id=target_id,
+                        start_time=sim_start,
                         target_time=target_time,
                         duration=time_duration,
                         time_steps=time_steps,
                         downsample_step=downsample_step,
                         num_targets=num_targets,
+                        category=current_target_specs.category,
                     )
 
                 await websocket.send_text(payload_json)
